@@ -25,11 +25,39 @@ pub fn hello() -> Result<String, String> {
 }
 
 #[test]
-fn test_post() {
+fn test_hello() {
     let s = hello();
     if let Ok(body) = s {
         assert_eq!(body, "{\"hello\":\"xyz600\"}");
     } else {
         panic!("fail to say hello.");
     }
+}
+
+pub fn get_problem(id: usize) -> Result<String, String> {
+    task::block_on(async {
+        let client = Client::new();
+
+        let mut req = Request::new(
+            Method::Get,
+            format!("{}/problems/{}/download", URL, id).as_str(),
+        );
+        req.insert_header("Authorization", format!("Bearer {}", API_TOKEN));
+        let maybe_res = client.send(req).await;
+        if let Ok(res) = maybe_res {
+            let mut res = res;
+            let ret = res.body_string().await.unwrap();
+            Ok(ret)
+        } else {
+            Err("fail to get problem".to_string())
+        }
+    })
+}
+
+#[test]
+fn test_get_problem() {
+    match get_problem(1) {
+        Err(_msg) => panic!("fail to get problem 1"),
+        Ok(_problem_json) => {}
+    };
 }
