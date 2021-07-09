@@ -16,6 +16,16 @@ impl Point {
     pub fn to_json(&self) -> String {
         format!("[{}, {}]", self.x, self.y)
     }
+
+    pub fn distance2(&self, p2: &Point) -> f64 {
+        let dx = self.x - p2.x;
+        let dy = self.y - p2.y;
+        dx * dx + dy * dy
+    }
+
+    pub fn distance(&self, p2: &Point) -> f64 {
+        self.distance2(p2).sqrt()
+    }
 }
 
 #[test]
