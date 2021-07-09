@@ -62,7 +62,7 @@ pub fn get_problem(id: usize) -> Result<String, String> {
 
 #[test]
 fn test_get_problem() {
-    let problem = task::block_on(get_problem(1));
+    let problem = task::block_on(async_get_problem(1));
     match problem {
         Err(_msg) => panic!("fail to get problem 1"),
         Ok(_problem_json) => {}

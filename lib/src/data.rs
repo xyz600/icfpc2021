@@ -1,4 +1,6 @@
 use serde_json::Value;
+use std::fs::File;
+use std::io::{BufReader, Read};
 
 #[derive(Clone, Copy)]
 pub struct Point {
@@ -165,6 +167,16 @@ impl Problem {
         self.figure.clear();
     }
 
+    pub fn from_file(filepath: &str) -> Problem {
+        let file = File::open(filepath).unwrap();
+        let mut buf = BufReader::new(file);
+        let mut s = String::new();
+        match buf.read_to_string(&mut s) {
+            Err(_) => panic!("fail to read file {}", filepath),
+            Ok(_) => Problem::from_json(s.as_str()),
+        }
+    }
+
     pub fn from_json(json: &str) -> Problem {
         let mut problem = Problem::new();
         let v = serde_json::from_str::<Value>(json).unwrap();
@@ -224,6 +236,13 @@ fn test_problem_from_json() {
     assert_eq!(problem.figure.edges[0].0, 2);
     assert_eq!(problem.figure.neighbors[0].len(), 2);
     assert_eq!(problem.epsilon, 0.15);
+}
+
+#[test]
+fn test_problem_from_file() {
+    let problem = Problem::from_file("../data/in/1.json");
+    assert_eq!(problem.hole.vertices.len(), 9);
+    assert_eq!(problem.hole.vertices[0].x, 45.0);
 }
 
 #[test]
