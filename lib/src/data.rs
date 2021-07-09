@@ -238,12 +238,12 @@ fn test_problem_to_json() {
 }
 
 pub struct Pose {
-    vertices: Vec<Point>,
+    pub vertices: Vec<Point>,
 }
 
 impl Pose {
-    pub fn new() -> Hole {
-        Hole { vertices: vec![] }
+    pub fn new() -> Pose {
+        Pose { vertices: vec![] }
     }
 
     pub fn push(&mut self, p: Point) {
@@ -251,7 +251,12 @@ impl Pose {
     }
 
     pub fn to_json(&self) -> String {
-        vertices_to_json(&self.vertices)
+        let mut buffer = String::new();
+        buffer += "{";
+        buffer += "\"vertices\": ";
+        buffer += vertices_to_json(&self.vertices).as_str();
+        buffer += "}";
+        buffer
     }
 }
 
@@ -260,5 +265,5 @@ fn test_pose_to_json() {
     let mut pose = Pose::new();
     pose.push(Point::new(2.5, 3.5));
     pose.push(Point::new(4.5, 5.5));
-    assert_eq!(pose.to_json(), "[[2.5, 3.5], [4.5, 5.5]]")
+    assert_eq!(pose.to_json(), "{\"vertices\": [[2.5, 3.5], [4.5, 5.5]]}");
 }
