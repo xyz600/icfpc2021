@@ -3,4 +3,5 @@
 members = [
     "lib",
     "problem-crawler",
+    "solver",
 ]
