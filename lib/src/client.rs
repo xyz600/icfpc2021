@@ -41,10 +41,7 @@ fn test_hello() {
 pub async fn async_get_problem(id: usize) -> Result<String, String> {
     let client = Client::new();
 
-    let mut req = Request::new(
-        Method::Get,
-        format!("{}/problems/{}/download", URL, id).as_str(),
-    );
+    let mut req = Request::new(Method::Get, format!("{}/api/problems/{}", URL, id).as_str());
     req.insert_header("Authorization", format!("Bearer {}", API_TOKEN));
     let maybe_res = client.send(req).await;
     if let Ok(res) = maybe_res {
@@ -74,10 +71,11 @@ pub async fn async_submit_problem(id: usize, pose: &Pose) -> Result<String, Stri
 
     let mut req = Request::new(
         Method::Post,
-        format!("{}/problems/{}/solutions", URL, id).as_str(),
+        format!("{}/api/problems/{}/solutions", URL, id).as_str(),
     );
     req.insert_header("Authorization", format!("Bearer {}", API_TOKEN));
     req.set_body(pose.to_json());
+    println!("{}", pose.to_json());
     let maybe_res = client.send(req).await;
     if let Ok(res) = maybe_res {
         let mut res = res;
@@ -94,5 +92,17 @@ pub fn submit_problem(id: usize, pose: &Pose) -> Result<String, String> {
 
 #[test]
 fn test_submit_problem() {
-    // cannot test
+    use crate::data::Point;
+
+    const ID: usize = 13;
+    let mut pose = Pose::new();
+    pose.push(Point::new(20.0, 0.0));
+    pose.push(Point::new(40.0, 20.0));
+    pose.push(Point::new(0.0, 20.0));
+    pose.push(Point::new(20.0, 40.0));
+
+    match submit_problem(ID, &pose) {
+        Err(_msg) => panic!("failed to send msg"),
+        Ok(body) => println!("{}", body),
+    }
 }
