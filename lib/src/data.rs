@@ -82,9 +82,9 @@ fn test_hole_to_json() {
 }
 
 pub struct Figure {
-    vertices: Vec<Point>,
-    edges: Vec<(usize, usize)>,
-    neighbors: Vec<Vec<usize>>,
+    pub vertices: Vec<Point>,
+    pub edges: Vec<(usize, usize)>,
+    pub neighbors: Vec<Vec<usize>>,
 }
 
 impl Figure {
