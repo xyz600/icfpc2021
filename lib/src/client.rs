@@ -9,7 +9,7 @@ const URL: &str = "https://poses.live";
 
 use http_client::h1::H1Client as Client;
 
-pub async fn hello() -> Result<String, String> {
+pub async fn async_hello() -> Result<String, String> {
     let client = Client::new();
 
     let mut req = Request::new(Method::Get, format!("{}/api/hello", URL).as_str());
@@ -24,9 +24,13 @@ pub async fn hello() -> Result<String, String> {
     }
 }
 
+pub fn hello() -> Result<String, String> {
+    task::block_on(async_hello())
+}
+
 #[test]
 fn test_hello() {
-    let s = task::block_on(hello());
+    let s = hello();
     if let Ok(body) = s {
         assert_eq!(body, "{\"hello\":\"xyz600\"}");
     } else {
@@ -34,7 +38,7 @@ fn test_hello() {
     }
 }
 
-pub async fn get_problem(id: usize) -> Result<String, String> {
+pub async fn async_get_problem(id: usize) -> Result<String, String> {
     let client = Client::new();
 
     let mut req = Request::new(
@@ -52,6 +56,10 @@ pub async fn get_problem(id: usize) -> Result<String, String> {
     }
 }
 
+pub fn get_problem(id: usize) -> Result<String, String> {
+    task::block_on(async_get_problem(id))
+}
+
 #[test]
 fn test_get_problem() {
     let problem = task::block_on(get_problem(1));
@@ -61,7 +69,7 @@ fn test_get_problem() {
     };
 }
 
-pub async fn submit_problem(id: usize, pose: &Pose) -> Result<String, String> {
+pub async fn async_submit_problem(id: usize, pose: &Pose) -> Result<String, String> {
     let client = Client::new();
 
     let mut req = Request::new(
@@ -78,6 +86,10 @@ pub async fn submit_problem(id: usize, pose: &Pose) -> Result<String, String> {
     } else {
         Err("fail to get problem".to_string())
     }
+}
+
+pub fn submit_problem(id: usize, pose: &Pose) -> Result<String, String> {
+    task::block_on(async_submit_problem(id, pose))
 }
 
 #[test]
