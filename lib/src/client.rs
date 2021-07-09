@@ -1,3 +1,5 @@
+pub use crate::data::Pose;
+
 use async_std::task;
 use http_client::http_types::{Method, Request};
 use http_client::HttpClient;
@@ -60,4 +62,30 @@ fn test_get_problem() {
         Err(_msg) => panic!("fail to get problem 1"),
         Ok(_problem_json) => {}
     };
+}
+
+pub fn submit_problem(id: usize, pose: &Pose) -> Result<String, String> {
+    task::block_on(async {
+        let client = Client::new();
+
+        let mut req = Request::new(
+            Method::Post,
+            format!("{}/problems/{}/solutions", URL, id).as_str(),
+        );
+        req.insert_header("Authorization", format!("Bearer {}", API_TOKEN));
+        req.set_body(pose.to_json());
+        let maybe_res = client.send(req).await;
+        if let Ok(res) = maybe_res {
+            let mut res = res;
+            let ret = res.body_string().await.unwrap();
+            Ok(ret)
+        } else {
+            Err("fail to get problem".to_string())
+        }
+    })
+}
+
+#[test]
+fn test_submit_problem() {
+    // cannot test
 }
