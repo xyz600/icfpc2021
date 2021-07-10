@@ -173,7 +173,6 @@ fn distance_line_point_distance1() {
     let p3 = Point::new(3.0, 1.0);
     let l = Line::new(p1, p2);
     let real_dist = l.distance_of(&p3);
-    println!("{}", real_dist);
     assert!((real_dist - 2.0f64.sqrt()).abs() < EPS);
 }
 
@@ -185,7 +184,6 @@ fn distance_line_point_distance2() {
     let p3 = Point::new(1.0, 0.0);
     let l = Line::new(p1, p2);
     let real_dist = l.distance_of(&p3);
-    println!("{}", real_dist);
     assert!((real_dist - 1.0f64).abs() < EPS);
 }
 
@@ -254,22 +252,7 @@ impl Triangle {
         let l1 = Line::new(self.v0, self.v1);
         let l2 = Line::new(self.v1, self.v2);
         let l3 = Line::new(self.v2, self.v0);
-        println!(
-            "{} {} {}",
-            l1.intersect(&gp),
-            l2.intersect(&gp),
-            l3.intersect(&gp)
-        );
-        if l1.intersect(&gp) {
-            return false;
-        }
-        if l2.intersect(&gp) {
-            return false;
-        }
-        if l3.intersect(&gp) {
-            return false;
-        }
-        true
+        !l1.intersect(&gp) && !l2.intersect(&gp) && !l3.intersect(&gp)
     }
 
     pub fn distance_of(&self, p: &Point) -> f64 {
@@ -291,6 +274,21 @@ impl Triangle {
 #[test]
 fn test_distance_triangle_point1() {
     // 三角形の内部にあるケース
+    let p0 = Point::new(1.0, 1.0);
+    let p1 = Point::new(1.0, 3.0);
+    let p2 = Point::new(3.0, 3.0);
+    let tri = Triangle::new(p0, p1, p2);
+    assert!(tri.is_internal_of(&p0));
+    assert!(tri.is_internal_of(&p1));
+    assert!(tri.is_internal_of(&p2));
+    let p3 = Point::new(3.0, 1.0);
+    assert!(!tri.is_internal_of(&p3));
+    assert_eq!(tri.distance_of(&p3), 2.0f64.sqrt());
+}
+
+#[test]
+fn test_distance_triangle_point2() {
+    // 三角形の外側にあるケース
     let p0 = Point::new(1.0, 1.0);
     let p1 = Point::new(1.0, 3.0);
     let p2 = Point::new(3.0, 3.0);
