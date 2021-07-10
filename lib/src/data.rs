@@ -49,6 +49,25 @@ impl Point {
     pub fn eq(&self, p: &Point) -> bool {
         self.x == p.x && self.y == p.y
     }
+
+    pub fn ccw(a: &Point, b: &Point, c: &Point) -> i64 {
+        let b = *b - *a;
+        let c = *c - *a;
+        let cross_bc = b.cross(&c);
+        if cross_bc > 0.0 {
+            return 1;
+        }
+        if cross_bc < 0.0 {
+            return -1;
+        }
+        if b.dot(&c) < 0.0 {
+            return 2;
+        }
+        if b.norm() < c.norm() {
+            return -2;
+        }
+        0
+    }
 }
 
 impl Add for Point {
@@ -268,6 +287,13 @@ impl Triangle {
             .map(|l| l.distance_of(p))
             .fold(1e100, f64::min)
         }
+    }
+
+    pub fn contains_self(&self) -> bool {
+        let base = self.gravity();
+        Point::ccw(&self.v0, &self.v1, &base) >= 0
+            && Point::ccw(&self.v1, &self.v2, &base) >= 0
+            && Point::ccw(&self.v2, &self.v0, &base) >= 0
     }
 }
 

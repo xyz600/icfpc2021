@@ -71,7 +71,7 @@ impl HoleDistanceCalculator {
                 let v0 = i;
                 let v1 = if i == vertices.len() - 1 { 0 } else { i + 1 };
                 let line = Line::new(vertices[v0], vertices[v1]);
-                if line.intersect(&eye_line) {
+                if line.intersect(&eye_line) && tri.contains_self() {
                     return true;
                 }
             }
@@ -105,6 +105,12 @@ impl HoleDistanceCalculator {
                 panic!("many loops occured during triangle-decomposition");
             }
         }
+        // for tri in ans.iter() {
+        //     println!(
+        //         "{} {} {} {} {} {}",
+        //         tri.v0.x, tri.v0.y, tri.v1.x, tri.v1.y, tri.v2.x, tri.v2.y
+        //     );
+        // }
         ans
     }
 
