@@ -66,13 +66,19 @@ fn dislike(problem: &Problem, pose: &Pose) -> f64 {
     }
     sum
 }
-fn penalty(hdc: &HoleDistanceCalculator, problem: &Problem, pose: &Pose, index: usize) -> f64 {
+fn penalty(
+    hdc: &HoleDistanceCalculator,
+    problem: &Problem,
+    pose: &Pose,
+    index: usize,
+    temp_epsilon: f64,
+) -> f64 {
     let p = Point::new(pose.vertices[index].x, pose.vertices[index].y);
-    let mut sum = hdc.distance(&p);
+    let mut sum = hdc.distance(&p) * 1e-2;
     // 周囲の辺の距離
     for &ni in problem.figure.neighbors[index].iter() {
         let diff = (pose.distance(ni, index) / problem.figure.distance(ni, index) - 1.0).abs();
-        if diff > problem.epsilon {
+        if diff > problem.epsilon.max(temp_epsilon) {
             sum += diff;
         }
     }
@@ -84,15 +90,10 @@ fn solve2(problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
     let hdc = HoleDistanceCalculator::new(&problem.hole);
 
     let timer = Instant::now();
-    let mut elapsed_rate =
-        (timer.elapsed().as_millis() as f64 + timeout as f64 * 0.5) / (timeout as f64 * 1.5);
+    let mut elapsed_rate = timer.elapsed().as_millis() as f64 / timeout as f64;
 
     let mut pose = Pose {
         vertices: problem.figure.vertices.clone(),
-    };
-
-    let evaluate = |pose: &Pose, index: usize| -> f64 {
-        dislike(problem, pose) + 1e6 * penalty(&hdc, problem, pose, index)
     };
 
     let n = problem.figure.vertices.len();
@@ -100,7 +101,9 @@ fn solve2(problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
     let mut rng = rand::thread_rng();
     let mut counter = 0;
 
-    let mut best_eval = std::f64::MAX;
+    let evaluate = |pose: &Pose, index: usize, eps: f64| -> f64 {
+        1e-4 * dislike(problem, pose) + 1e6 * penalty(&hdc, problem, pose, index, eps)
+    };
 
     loop {
         // 乱数で頂点を選択
@@ -109,7 +112,13 @@ fn solve2(problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
         let dist: f64 = rng.gen::<f64>();
         let rad: f64 = rng.gen::<f64>() * std::f64::consts::PI * 2.0;
 
-        let before_eval = evaluate(&pose, index);
+        let temp_epsilon = if elapsed_rate < 0.5 {
+            problem.epsilon + 0.2 * (0.5 - elapsed_rate)
+        } else {
+            problem.epsilon
+        };
+
+        let before_eval = evaluate(&pose, index, temp_epsilon);
 
         // 頂点座標を移動
         let dx = dist * rad.cos();
@@ -123,24 +132,12 @@ fn solve2(problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
 
         // コスト差分を計算
 
-        let after_eval = evaluate(&pose, index);
+        let after_eval = evaluate(&pose, index, temp_epsilon);
 
         let eval_diff = after_eval - before_eval;
 
         // 良ければ山登りで採用
-        if eval_diff < 0.0 {
-            if after_eval < best_eval {
-                println!("{} {} -> {} {}", prev_x, prev_y, prev_x + dx, prev_y + dy);
-                println!("improve! eval = {} -> {}", best_eval, after_eval);
-                println!(
-                    "{} {}",
-                    dislike(problem, &pose),
-                    penalty(&hdc, problem, &pose, index)
-                );
-
-                best_eval = after_eval;
-            }
-        } else {
+        if eval_diff > 0.0 {
             pose.vertices[index].x = prev_x;
             pose.vertices[index].y = prev_y;
         }
@@ -150,25 +147,51 @@ fn solve2(problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
             if timer.elapsed().as_millis() > timeout {
                 break;
             }
-            elapsed_rate = (timer.elapsed().as_millis() as f64 + timeout as f64 * 0.5)
-                / (timeout as f64 * 1.5);
+            elapsed_rate = timer.elapsed().as_millis() as f64 / timeout as f64;
         }
     }
     eprintln!("counter = {}", counter);
     eprintln!("{}", pose.to_json());
 
-    // 外側に残った点が存在してしまうなら false
-    for vertex in pose.vertices.iter() {
-        if hdc.distance(&vertex) > 0.0 {
-            return None;
+    // 整数化
+    // 一番コストがいいやつに丸める
+    for i in 0..pose.vertices.len() {
+        let x1 = pose.vertices[i].x.floor();
+        let x2 = x1 + 1.0;
+        let y1 = pose.vertices[i].y.floor();
+        let y2 = y1 + 1.0;
+        let ps = vec![
+            Point::new(x1, y1),
+            Point::new(x1, y2),
+            Point::new(x2, y1),
+            Point::new(x2, y2),
+        ];
+
+        let mut best_eval = std::f64::MAX;
+        let mut best_p = ps[0];
+        for p in ps.iter() {
+            pose.vertices[i] = *p;
+            let eval = evaluate(&pose, i, problem.epsilon);
+            if best_eval > eval {
+                best_eval = eval;
+                best_p = *p;
+            }
         }
+        pose.vertices[i] = best_p;
     }
+
+    // 外側に残った点が存在してしまうなら false
+    // for vertex in pose.vertices.iter() {
+    //     if hdc.distance(&vertex) > 0.0 {
+    //         return None;
+    //     }
+    // }
 
     Some(pose)
 }
 
 fn main() {
-    for id in 4..5 {
+    for id in 11..12 {
         let problem = Problem::from_file(format!("data/in/{}.json", id).as_str());
         println!("load problem {}:", id);
         if let Some(pose) = solve(&problem) {
@@ -176,7 +199,7 @@ fn main() {
             if let Err(_msg) = submit_problem(id, &pose) {
                 panic!("fail to submit problem {}", id);
             }
-        } else if let Some(pose) = solve2(&problem, 0, 10000) {
+        } else if let Some(pose) = solve2(&problem, 0, 15000) {
             println!("submit problem 2! {}", id);
             if let Err(_msg) = submit_problem(id, &pose) {
                 panic!("fail to submit problem 2 {}", id);
