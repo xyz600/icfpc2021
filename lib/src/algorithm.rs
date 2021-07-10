@@ -62,55 +62,81 @@ pub struct HoleDistanceCalculator {
 
 impl HoleDistanceCalculator {
     fn decompose(vertices: &Vec<Point>) -> Vec<Triangle> {
-        let mut ans = vec![];
+        // https://sonson.jp/blog/2007/02/12/1/
+
+        let mut ans: Vec<Triangle> = vec![];
         let mut indices = (0..vertices.len()).collect::<Vec<usize>>();
 
-        let intersect_others = |tri: &Triangle| -> bool {
-            let eye_line = Line::new(tri.v0, tri.v2);
+        let find_farthest_index = |indices: &Vec<usize>| -> usize {
+            let mut max_dist = 0.0;
+            let mut ret = 0;
+            for j in 0..indices.len() {
+                let norm = vertices[indices[j]].norm();
+                if max_dist < norm {
+                    max_dist = norm;
+                    ret = j;
+                }
+            }
+            ret
+        };
+
+        let contain_triangle = |tri: &Triangle, v0: usize, v1: usize, v2: usize| -> bool {
             for i in 0..vertices.len() {
-                let v0 = i;
-                let v1 = if i == vertices.len() - 1 { 0 } else { i + 1 };
-                let line = Line::new(vertices[v0], vertices[v1]);
-                if line.intersect(&eye_line) && tri.contains_self() {
+                let ccw_01 = Point::ccw(&tri.v0, &tri.v1, &vertices[i]);
+                let ccw_12 = Point::ccw(&tri.v1, &tri.v2, &vertices[i]);
+                let ccw_20 = Point::ccw(&tri.v2, &tri.v0, &vertices[i]);
+                if i != v0 && i != v1 && i != v2 && ccw_01 * ccw_12 >= 0 && ccw_12 * ccw_20 >= 0 {
                     return true;
                 }
             }
             false
         };
-
-        let mut i = 0;
-        let mut counter = 0;
         while indices.len() >= 3 {
-            let v0 = if i == 0 { indices.len() - 1 } else { i - 1 };
-            let v1 = i;
-            let v2 = if i == indices.len() - 1 { 0 } else { i + 1 };
-            let tri = Triangle::new(
-                vertices[indices[v0]],
-                vertices[indices[v1]],
-                vertices[indices[v2]],
-            );
-            if !intersect_others(&tri) {
-                // 耳なので取り除ける
+            // 原点から最も遠い頂点
+            let i = find_farthest_index(&indices);
+            let i0 = if i == 0 { indices.len() - 1 } else { i - 1 };
+            let i1 = i;
+            let i2 = if i == indices.len() - 1 { 0 } else { i + 1 };
+            let v0 = indices[i0];
+            let v1 = indices[i1];
+            let v2 = indices[i2];
+
+            let tri = Triangle::new(vertices[v0], vertices[v1], vertices[v2]);
+
+            let base_dir = Point::ccw(&tri.v0, &tri.v1, &tri.v2);
+
+            if !contain_triangle(&tri, v0, v1, v2) {
                 ans.push(tri);
                 indices.remove(i);
-                counter = 0;
-            } else {
-                counter += 1;
-                i += 1;
+
+                continue;
             }
-            if i == indices.len() {
-                i = 0;
-            }
-            if counter >= 10000 {
-                panic!("many loops occured during triangle-decomposition");
+
+            let mut i = i;
+            loop {
+                i = if i == indices.len() - 1 { 0 } else { i + 1 };
+                let i0 = if i == 0 { indices.len() - 1 } else { i - 1 };
+                let i1 = i;
+                let i2 = if i == indices.len() - 1 { 0 } else { i + 1 };
+                let v0 = indices[i0];
+                let v1 = indices[i1];
+                let v2 = indices[i2];
+
+                let tri = Triangle::new(vertices[v0], vertices[v1], vertices[v2]);
+                let dir = Point::ccw(&tri.v0, &tri.v1, &tri.v2);
+                if base_dir * dir > 0 && !contain_triangle(&tri, v0, v1, v2) {
+                    ans.push(tri);
+                    indices.remove(i);
+                    break;
+                }
             }
         }
-        // for tri in ans.iter() {
-        //     println!(
-        //         "{} {} {} {} {} {}",
-        //         tri.v0.x, tri.v0.y, tri.v1.x, tri.v1.y, tri.v2.x, tri.v2.y
-        //     );
-        // }
+        for &tri in ans.iter() {
+            println!(
+                "{} {} {} {} {} {}",
+                tri.v0.x, tri.v0.y, tri.v1.x, tri.v1.y, tri.v2.x, tri.v2.y
+            );
+        }
         ans
     }
 

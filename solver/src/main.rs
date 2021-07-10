@@ -78,8 +78,6 @@ fn penalty(hdc: &HoleDistanceCalculator, problem: &Problem, pose: &Pose, index: 
     sum
 }
 
-fn evaluate_all()
-
 fn solve2(problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
     // 山登り
     let hdc = HoleDistanceCalculator::new(&problem.hole);
@@ -169,7 +167,7 @@ fn solve2(problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
 }
 
 fn main() {
-    for id in 1..2 {
+    for id in 1..79 {
         let problem = Problem::from_file(format!("data/in/{}.json", id).as_str());
         println!("load problem {}:", id);
         if let Some(pose) = solve(&problem) {
