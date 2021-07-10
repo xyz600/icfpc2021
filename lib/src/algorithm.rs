@@ -1,4 +1,4 @@
-use crate::data::{Hole, Line, Point, Triangle};
+use crate::data::{Hole, Point, Triangle};
 
 const EPS: f64 = 1e-8;
 
@@ -57,7 +57,7 @@ fn test_next_duplicated_permutation() {
 }
 
 pub struct HoleDistanceCalculator {
-    decomposed_triangles: Vec<Triangle>,
+    pub decomposed_triangles: Vec<Triangle>,
 }
 
 impl HoleDistanceCalculator {
@@ -130,12 +130,6 @@ impl HoleDistanceCalculator {
                     break;
                 }
             }
-        }
-        for &tri in ans.iter() {
-            println!(
-                "{} {} {} {} {} {}",
-                tri.v0.x, tri.v0.y, tri.v1.x, tri.v1.y, tri.v2.x, tri.v2.y
-            );
         }
         ans
     }
