@@ -1,8 +1,11 @@
 use serde_json::Value;
 use std::fs::File;
 use std::io::{BufReader, Read};
+use std::ops::{Add, Div, Mul, Sub};
 
-#[derive(Clone, Copy)]
+const EPS: f64 = 1e-8;
+
+#[derive(Clone, Copy, Debug)]
 pub struct Point {
     pub y: f64,
     pub x: f64,
@@ -26,6 +29,64 @@ impl Point {
     pub fn distance(&self, p2: &Point) -> f64 {
         self.distance2(p2).sqrt()
     }
+
+    pub fn dot(&self, p: &Point) -> f64 {
+        self.x * p.x + self.y * p.y
+    }
+
+    pub fn cross(&self, p: &Point) -> f64 {
+        self.x * p.y - self.y - p.x
+    }
+
+    pub fn norm(&self) -> f64 {
+        (self.x * self.x + self.y * self.y).sqrt()
+    }
+
+    pub fn normalize(&self) -> Point {
+        *self / self.norm()
+    }
+}
+
+impl Add for Point {
+    type Output = Self;
+    fn add(self, p: Point) -> Point {
+        Point::new(self.x + p.x, self.y + p.y)
+    }
+}
+
+impl Add<f64> for Point {
+    type Output = Self;
+    fn add(self, v: f64) -> Point {
+        Point::new(self.x + v, self.y + v)
+    }
+}
+
+impl Sub for Point {
+    type Output = Self;
+    fn sub(self, p: Point) -> Point {
+        Point::new(self.x - p.x, self.y - p.y)
+    }
+}
+
+impl Sub<f64> for Point {
+    type Output = Self;
+    fn sub(self, v: f64) -> Point {
+        Point::new(self.x - v, self.y - v)
+    }
+}
+
+impl Mul<f64> for Point {
+    type Output = Self;
+    fn mul(self, v: f64) -> Point {
+        Point::new(self.x * v, self.y * v)
+    }
+}
+
+impl Div<f64> for Point {
+    type Output = Self;
+    fn div(self, v: f64) -> Point {
+        Point::new(self.x / v, self.y / v)
+    }
 }
 
 #[test]
@@ -33,6 +94,142 @@ fn test_point_to_json() {
     let p = Point::new(2.5, 3.5);
     let s = p.to_json();
     assert_eq!(s, "[2.5, 3.5]");
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Line {
+    p0: Point,
+    p1: Point,
+}
+
+impl Line {
+    pub fn new(p0: Point, p1: Point) -> Line {
+        Line { p0: p0, p1: p1 }
+    }
+    pub fn dx(&self) -> f64 {
+        self.p1.x - self.p0.x
+    }
+    pub fn dy(&self) -> f64 {
+        self.p1.y - self.p0.x
+    }
+    pub fn intersect(&self, line: &Line) -> bool {
+        // https://qiita.com/zu_rin/items/e04fdec4e3dec6072104#%E5%A4%96%E7%A9%8D%E3%82%92%E7%94%A8%E3%81%84%E3%82%8B%E6%96%B9%E6%B3%95
+        let ac = Line::new(self.p0, line.p0);
+        let ad = Line::new(self.p0, line.p1);
+        let s = self.cross(&ac);
+        let t = self.cross(&ad);
+        s * t < EPS
+    }
+
+    pub fn cross(&self, line: &Line) -> f64 {
+        self.dx() * line.dy() - line.dx() * self.dy()
+    }
+
+    pub fn dot(&self, line: &Line) -> f64 {
+        self.dx() * line.dx() + self.dy() * line.dy()
+    }
+
+    pub fn distance_of(&self, p: &Point) -> f64 {
+        let v0 = self.p1 - self.p0;
+        let v1 = *p - self.p0;
+        let nv0 = v0.normalize();
+        let d10 = v1.dot(&nv0);
+        eprintln!("{:?} {:?}, {:?}", v0, v1, nv0);
+        if -EPS <= d10 && d10 <= v0.norm() + EPS {
+            // 垂線が引けるので、それが近い
+            // 三平方の定理から、距離^2 - 射影した距離^2
+            let d1 = v1.norm();
+            (d1 * d1 - d10 * d10).sqrt()
+        } else {
+            // 端点のどちらかが近い
+            self.p0.distance(p).min(self.p1.distance(p))
+        }
+    }
+}
+
+#[test]
+fn distance_line_point_distance1() {
+    // 垂線が線分の内にあるケース
+    let p1 = Point::new(1.0, 1.0);
+    let p2 = Point::new(3.0, 3.0);
+    let p3 = Point::new(3.0, 1.0);
+    let l = Line::new(p1, p2);
+    let real_dist = l.distance_of(&p3);
+    println!("{}", real_dist);
+    assert!((real_dist - 2.0f64.sqrt()).abs() < EPS);
+}
+
+#[test]
+fn distance_line_point_distance2() {
+    // 垂線が線分の外にあるケース
+    let p1 = Point::new(1.0, 1.0);
+    let p2 = Point::new(3.0, 3.0);
+    let p3 = Point::new(1.0, 0.0);
+    let l = Line::new(p1, p2);
+    let real_dist = l.distance_of(&p3);
+    println!("{}", real_dist);
+    assert!((real_dist - 1.0f64).abs() < EPS);
+}
+
+#[test]
+fn test_line_intersect() {
+    let a = Point::new(0.0, 0.0);
+    let b = Point::new(1.0, 1.0);
+    let c = Point::new(1.0, 0.0);
+    let d = Point::new(0.0, 1.0);
+    let ab = Line::new(a, b);
+    let cd = Line::new(c, d);
+    assert!(ab.intersect(&cd));
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Triangle {
+    pub v0: Point,
+    pub v1: Point,
+    pub v2: Point,
+}
+
+impl Triangle {
+    pub fn new(v0: Point, v1: Point, v2: Point) -> Triangle {
+        Triangle {
+            v0: v0,
+            v1: v1,
+            v2: v2,
+        }
+    }
+
+    pub fn gravity(&self) -> Point {
+        let gx = (self.v0.x + self.v1.x + self.v2.x) / 3.0;
+        let gy = (self.v0.y + self.v1.y + self.v2.y) / 3.0;
+        Point::new(gx, gy)
+    }
+
+    pub fn is_internal_of(&self, p: &Point) -> bool {
+        let g = self.gravity();
+        let gp = Line::new(g, *p);
+        vec![
+            Line::new(self.v0, self.v1),
+            Line::new(self.v1, self.v2),
+            Line::new(self.v2, self.v0),
+        ]
+        .iter()
+        .all(|l| !gp.intersect(l))
+    }
+
+    pub fn distance_of(&self, p: &Point) -> f64 {
+        if self.is_internal_of(p) {
+            0.0
+        } else {
+            vec![
+                Line::new(self.v0, self.v1),
+                Line::new(self.v1, self.v2),
+                Line::new(self.v2, self.v0),
+            ]
+            .iter()
+            .map(|l| l.distance_of(p))
+            .fold(1e100, f64::min)
+        }
+    }
 }
 
 fn vertices_to_json(vertices: &Vec<Point>) -> String {
