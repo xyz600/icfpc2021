@@ -390,6 +390,10 @@ impl Figure {
         self.edges.clear();
     }
 
+    pub fn distance(&self, index1: usize, index2: usize) -> f64 {
+        return self.vertices[index1].distance(&self.vertices[index2]);
+    }
+
     pub fn to_json(&self) -> String {
         let mut buffer = String::new();
         buffer += "{";
@@ -543,6 +547,10 @@ impl Pose {
 
     pub fn push(&mut self, p: Point) {
         self.vertices.push(p);
+    }
+
+    pub fn distance(&self, index1: usize, index2: usize) -> f64 {
+        self.vertices[index1].distance(&self.vertices[index2])
     }
 
     pub fn to_json(&self) -> String {

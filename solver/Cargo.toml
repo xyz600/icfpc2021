@@ -7,3 +7,4 @@ edition = "2018"
 
 [dependencies]
 lib = { path = "../lib" }
+rand = "0.8.4"
