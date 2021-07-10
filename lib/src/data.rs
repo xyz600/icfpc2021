@@ -7,8 +7,8 @@ const EPS: f64 = 1e-8;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Point {
-    pub y: f64,
     pub x: f64,
+    pub y: f64,
 }
 
 impl Point {
@@ -35,7 +35,7 @@ impl Point {
     }
 
     pub fn cross(&self, p: &Point) -> f64 {
-        self.x * p.y - self.y - p.x
+        self.x * p.y - self.y * p.x
     }
 
     pub fn norm(&self) -> f64 {
@@ -51,23 +51,39 @@ impl Point {
     }
 
     pub fn ccw(a: &Point, b: &Point, c: &Point) -> i64 {
-        let b = *b - *a;
-        let c = *c - *a;
-        let cross_bc = b.cross(&c);
+        let ab = *b - *a;
+        let ac = *c - *a;
+        let cross_bc = ab.cross(&ac);
         if cross_bc > 0.0 {
             return 1;
         }
         if cross_bc < 0.0 {
             return -1;
         }
-        if b.dot(&c) < 0.0 {
+        if ab.dot(&ac) < 0.0 {
             return 2;
         }
-        if b.norm() < c.norm() {
+        if ab.norm() < ac.norm() {
             return -2;
         }
         0
     }
+}
+
+#[test]
+fn test_ccw() {
+    let v0 = Point::new(35.0, 5.0);
+    let v1 = Point::new(95.0, 95.0);
+    let v2 = Point::new(65.0, 95.0);
+    let v3 = Point::new(45.0, 80.0);
+
+    let ccw_01 = Point::ccw(&v0, &v1, &v3);
+    let ccw_12 = Point::ccw(&v1, &v2, &v3);
+    let ccw_20 = Point::ccw(&v2, &v0, &v3);
+
+    assert!(ccw_01 > 0);
+    assert!(ccw_12 > 0);
+    assert!(ccw_20 < 0);
 }
 
 impl Add for Point {
@@ -287,13 +303,6 @@ impl Triangle {
             .map(|l| l.distance_of(p))
             .fold(1e100, f64::min)
         }
-    }
-
-    pub fn contains_self(&self) -> bool {
-        let base = self.gravity();
-        Point::ccw(&self.v0, &self.v1, &base) >= 0
-            && Point::ccw(&self.v1, &self.v2, &base) >= 0
-            && Point::ccw(&self.v2, &self.v0, &base) >= 0
     }
 }
 
