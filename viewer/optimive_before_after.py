@@ -46,8 +46,8 @@ class Pose:
 if __name__ == "__main__":
 
     problem_id = sys.argv[1]
-    problem_path = f"../data/in/{problem_id}.json"
-    pose_path = f"{problem_id}.json"
+    problem_path = f"data/in/{problem_id}.json"
+    pose_path = f"data/out/{problem_id}.json"
 
     problem = Problem(problem_path)
     pose = Pose(pose_path)
