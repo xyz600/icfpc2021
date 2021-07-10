@@ -4,7 +4,7 @@ const EPS: f64 = 1e-8;
 
 use lib::algorithm::{next_permutation, HoleDistanceCalculator};
 use lib::client::submit_problem;
-use lib::data::{Pose, Problem};
+use lib::data::{Point, Pose, Problem};
 use rand::Rng;
 use std::time::Instant;
 
@@ -66,13 +66,14 @@ fn dislike(problem: &Problem, pose: &Pose) -> f64 {
     }
     sum
 }
-
 fn penalty(hdc: &HoleDistanceCalculator, problem: &Problem, pose: &Pose, index: usize) -> f64 {
-    let mut sum = 100.0 * hdc.distance(&problem.figure.vertices[index]);
+    let p = Point::new(pose.vertices[index].x, pose.vertices[index].y);
+    let mut sum = hdc.distance(&p);
+    // 周囲の辺の距離
     for &ni in problem.figure.neighbors[index].iter() {
-        let diff = (problem.figure.distance(ni, index) / pose.distance(ni, index) - 1.0).abs();
-        if diff > problem.epsilon * 0.9999 {
-            sum += 1e10 * diff;
+        let diff = (pose.distance(ni, index) / problem.figure.distance(ni, index) - 1.0).abs();
+        if diff > problem.epsilon {
+            sum += diff;
         }
     }
     sum
@@ -91,7 +92,7 @@ fn solve2(problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
     };
 
     let evaluate = |pose: &Pose, index: usize| -> f64 {
-        dislike(problem, pose) + penalty(&hdc, problem, pose, index)
+        dislike(problem, pose) + 1e6 * penalty(&hdc, problem, pose, index)
     };
 
     let n = problem.figure.vertices.len();
@@ -127,7 +128,7 @@ fn solve2(problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
         let eval_diff = after_eval - before_eval;
 
         // 良ければ山登りで採用
-        if eval_diff < 0.0 || (-elapsed_rate * 1e-6 * eval_diff).exp() < rng.gen::<f64>() {
+        if eval_diff < 0.0 {
             if after_eval < best_eval {
                 println!("{} {} -> {} {}", prev_x, prev_y, prev_x + dx, prev_y + dy);
                 println!("improve! eval = {} -> {}", best_eval, after_eval);
@@ -167,7 +168,7 @@ fn solve2(problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
 }
 
 fn main() {
-    for id in 1..79 {
+    for id in 4..5 {
         let problem = Problem::from_file(format!("data/in/{}.json", id).as_str());
         println!("load problem {}:", id);
         if let Some(pose) = solve(&problem) {
@@ -175,7 +176,7 @@ fn main() {
             if let Err(_msg) = submit_problem(id, &pose) {
                 panic!("fail to submit problem {}", id);
             }
-        } else if let Some(pose) = solve2(&problem, 0, 30000) {
+        } else if let Some(pose) = solve2(&problem, 0, 10000) {
             println!("submit problem 2! {}", id);
             if let Err(_msg) = submit_problem(id, &pose) {
                 panic!("fail to submit problem 2 {}", id);
