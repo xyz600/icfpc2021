@@ -5,4 +5,5 @@ members = [
     "problem-crawler",
     "solver",
     "hole_print",
+    "eval-contour-dump",
 ]
