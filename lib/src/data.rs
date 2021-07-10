@@ -45,6 +45,10 @@ impl Point {
     pub fn normalize(&self) -> Point {
         *self / self.norm()
     }
+
+    pub fn eq(&self, p: &Point) -> bool {
+        self.x == p.x && self.y == p.y
+    }
 }
 
 impl Add for Point {
@@ -110,15 +114,30 @@ impl Line {
         self.p1.x - self.p0.x
     }
     pub fn dy(&self) -> f64 {
-        self.p1.y - self.p0.x
+        self.p1.y - self.p0.y
     }
     pub fn intersect(&self, line: &Line) -> bool {
+        if self.p0.eq(&line.p0)
+            || self.p0.eq(&line.p1)
+            || self.p1.eq(&line.p0)
+            || self.p1.eq(&line.p1)
+        {
+            return false;
+        }
         // https://qiita.com/zu_rin/items/e04fdec4e3dec6072104#%E5%A4%96%E7%A9%8D%E3%82%92%E7%94%A8%E3%81%84%E3%82%8B%E6%96%B9%E6%B3%95
         let ac = Line::new(self.p0, line.p0);
         let ad = Line::new(self.p0, line.p1);
         let s = self.cross(&ac);
         let t = self.cross(&ad);
-        s * t < EPS
+        if s * t >= 0.0 {
+            return false;
+        }
+
+        let ca = Line::new(line.p0, self.p0);
+        let cb = Line::new(line.p0, self.p1);
+        let s = line.cross(&ca);
+        let t = line.cross(&cb);
+        s * t < 0.0
     }
 
     pub fn cross(&self, line: &Line) -> f64 {
@@ -134,7 +153,6 @@ impl Line {
         let v1 = *p - self.p0;
         let nv0 = v0.normalize();
         let d10 = v1.dot(&nv0);
-        eprintln!("{:?} {:?}, {:?}", v0, v1, nv0);
         if -EPS <= d10 && d10 <= v0.norm() + EPS {
             // 垂線が引けるので、それが近い
             // 三平方の定理から、距離^2 - 射影した距離^2
@@ -172,7 +190,7 @@ fn distance_line_point_distance2() {
 }
 
 #[test]
-fn test_line_intersect() {
+fn test_line_intersect1() {
     let a = Point::new(0.0, 0.0);
     let b = Point::new(1.0, 1.0);
     let c = Point::new(1.0, 0.0);
@@ -180,6 +198,33 @@ fn test_line_intersect() {
     let ab = Line::new(a, b);
     let cd = Line::new(c, d);
     assert!(ab.intersect(&cd));
+}
+
+#[test]
+fn test_line_intersect2() {
+    // 端点が共有している場合は、交差ではない
+    let a = Point::new(0.0, 0.0);
+    let b = Point::new(1.0, 1.0);
+    let c = Point::new(1.0, 0.0);
+    let ab = Line::new(a, b);
+    let bc = Line::new(b, c);
+    assert!(!ab.intersect(&bc));
+
+    let ac = Line::new(a, c);
+    assert!(!ac.intersect(&bc));
+}
+
+#[test]
+fn test_line_intersect3() {
+    let p0 = Point::new(1.0, 1.0);
+    let p1 = Point::new(1.0, 3.0);
+    let p2 = Point::new(3.0, 3.0);
+    let tri = Triangle::new(p0, p1, p2);
+    let g = tri.gravity();
+    let l0 = Line::new(p2, p0);
+    let l1 = Line::new(g, p1);
+    assert!(!l1.intersect(&l0));
+    assert!(!l0.intersect(&l1));
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -199,21 +244,32 @@ impl Triangle {
     }
 
     pub fn gravity(&self) -> Point {
-        let gx = (self.v0.x + self.v1.x + self.v2.x) / 3.0;
-        let gy = (self.v0.y + self.v1.y + self.v2.y) / 3.0;
-        Point::new(gx, gy)
+        (self.v0 + self.v1 + self.v2) / 3.0
     }
 
     pub fn is_internal_of(&self, p: &Point) -> bool {
         let g = self.gravity();
         let gp = Line::new(g, *p);
-        vec![
-            Line::new(self.v0, self.v1),
-            Line::new(self.v1, self.v2),
-            Line::new(self.v2, self.v0),
-        ]
-        .iter()
-        .all(|l| !gp.intersect(l))
+
+        let l1 = Line::new(self.v0, self.v1);
+        let l2 = Line::new(self.v1, self.v2);
+        let l3 = Line::new(self.v2, self.v0);
+        println!(
+            "{} {} {}",
+            l1.intersect(&gp),
+            l2.intersect(&gp),
+            l3.intersect(&gp)
+        );
+        if l1.intersect(&gp) {
+            return false;
+        }
+        if l2.intersect(&gp) {
+            return false;
+        }
+        if l3.intersect(&gp) {
+            return false;
+        }
+        true
     }
 
     pub fn distance_of(&self, p: &Point) -> f64 {
@@ -230,6 +286,21 @@ impl Triangle {
             .fold(1e100, f64::min)
         }
     }
+}
+
+#[test]
+fn test_distance_triangle_point1() {
+    // 三角形の内部にあるケース
+    let p0 = Point::new(1.0, 1.0);
+    let p1 = Point::new(1.0, 3.0);
+    let p2 = Point::new(3.0, 3.0);
+    let tri = Triangle::new(p0, p1, p2);
+    assert!(tri.is_internal_of(&p0));
+    assert!(tri.is_internal_of(&p1));
+    assert!(tri.is_internal_of(&p2));
+    let p3 = (p0 + p1 + p2 * 2.0) / 4.0;
+    assert!(tri.is_internal_of(&p3));
+    assert_eq!(tri.distance_of(&p3), 0.0);
 }
 
 fn vertices_to_json(vertices: &Vec<Point>) -> String {

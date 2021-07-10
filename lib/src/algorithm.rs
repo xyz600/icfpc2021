@@ -1,3 +1,5 @@
+use crate::data::{Hole, Line, Point, Triangle};
+
 pub fn next_permutation(vec: &mut Vec<usize>) -> bool {
     for i in (0..vec.len() - 1).rev() {
         if vec[i] < vec[i + 1] {
@@ -45,9 +47,104 @@ pub fn next_duplicated_permutation(state: &mut Vec<usize>, max_value: usize) -> 
 fn test_next_duplicated_permutation() {
     let mut vec = vec![0, 0, 0, 0];
     assert!(next_duplicated_permutation(&mut vec, 2));
-    assert_eq!(vec![0, 0, 0, 1], vec);
+    assert_eq!(vec![1, 0, 0, 0], vec);
     assert!(next_duplicated_permutation(&mut vec, 2));
-    assert_eq!(vec![0, 0, 0, 2], vec);
+    assert_eq!(vec![2, 0, 0, 0], vec);
     assert!(next_duplicated_permutation(&mut vec, 2));
-    assert_eq!(vec![0, 0, 1, 0], vec);
+    assert_eq!(vec![0, 1, 0, 0], vec);
+}
+
+pub struct HoleDistanceCalculator {
+    decomposed_triangles: Vec<Triangle>,
+}
+
+impl HoleDistanceCalculator {
+    fn decompose(vertices: &Vec<Point>) -> Vec<Triangle> {
+        let mut ans = vec![];
+        let mut indices = (0..vertices.len()).collect::<Vec<usize>>();
+
+        let intersect_others = |indices: &Vec<usize>, tri: &Triangle| -> bool {
+            let eye_line = Line::new(tri.v0, tri.v2);
+            for i in 0..indices.len() {
+                let v0 = indices[i];
+                let v1 = if i == indices.len() - 1 {
+                    indices[0]
+                } else {
+                    indices[i + 1]
+                };
+                let line = Line::new(vertices[v0], vertices[v1]);
+                if line.intersect(&eye_line) {
+                    return true;
+                }
+            }
+            false
+        };
+
+        let mut i = 0;
+        let mut counter = 0;
+        while indices.len() >= 3 {
+            let v0 = if i == 0 { indices.len() - 1 } else { i - 1 };
+            let v1 = i;
+            let v2 = if i == indices.len() - 1 { 0 } else { i + 1 };
+            let tri = Triangle::new(vertices[v0], vertices[v1], vertices[v2]);
+            if !intersect_others(&indices, &tri) {
+                // 耳なので取り除ける
+                ans.push(tri);
+                indices.remove(i);
+                counter = 0;
+            } else {
+                counter += 1;
+                i += 1;
+                if i == indices.len() {
+                    i = 0;
+                }
+            }
+            if counter >= 10000 {
+                panic!("many loops occured during triangle-decomposition");
+            }
+        }
+        ans
+    }
+
+    pub fn new(hole: &Hole) -> HoleDistanceCalculator {
+        HoleDistanceCalculator {
+            decomposed_triangles: HoleDistanceCalculator::decompose(&hole.vertices),
+        }
+    }
+
+    pub fn distance(&self, p: &Point) -> f64 {
+        let mut min_distance = 1e100;
+        // for tri in &self.decomposed_triangles.iter() {}
+        min_distance
+    }
+}
+
+#[test]
+fn test_triangle_decompse() {
+    let mut hole = Hole::new();
+    hole.push(Point::new(0.0, 0.0));
+    hole.push(Point::new(1.0, 0.0));
+    hole.push(Point::new(1.0, 1.0));
+    hole.push(Point::new(0.0, 1.0));
+    let hdc = HoleDistanceCalculator::new(&hole);
+    assert_eq!(hdc.decomposed_triangles.len(), 2);
+}
+
+#[test]
+fn test_triangle_decompse2() {
+    let mut hole = Hole::new();
+    hole.push(Point::new(0.0, 1.0));
+    hole.push(Point::new(1.0, 1.0));
+    hole.push(Point::new(1.0, 0.0));
+    hole.push(Point::new(2.0, 0.0));
+    hole.push(Point::new(2.0, 1.0));
+    hole.push(Point::new(3.0, 1.0));
+    hole.push(Point::new(3.0, 2.0));
+    hole.push(Point::new(2.0, 2.0));
+    hole.push(Point::new(2.0, 3.0));
+    hole.push(Point::new(1.0, 3.0));
+    hole.push(Point::new(1.0, 2.0));
+    hole.push(Point::new(0.0, 2.0));
+    let hdc = HoleDistanceCalculator::new(&hole);
+    assert_eq!(hdc.decomposed_triangles.len(), 10);
 }
