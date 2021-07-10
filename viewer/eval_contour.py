@@ -40,17 +40,17 @@ class Problem:
     def plot(self, plt):
 
         # hole
-        xs = [item[0]
-              for item in self.hole_vertices] + [self.hole_vertices[0][0]]
-        ys = [item[1]
-              for item in self.hole_vertices] + [self.hole_vertices[0][1]]
-        plt.plot(xs, ys, 'b-')
+        # xs = [item[0]
+        #       for item in self.hole_vertices] + [self.hole_vertices[0][0]]
+        # ys = [item[1]
+        #       for item in self.hole_vertices] + [self.hole_vertices[0][1]]
+        # plt.plot(xs, ys, 'b-')
 
-        # # previous figure
-        # for e in self.figure_edges:
-        #     xs = [self.figure_vertices[e[0]][0], self.figure_vertices[e[1]][0]]
-        #     ys = [self.figure_vertices[e[0]][1], self.figure_vertices[e[1]][1]]
-        #     plt.plot(xs, ys, '-', color='black')
+        # previous figure
+        for e in self.figure_edges:
+            xs = [self.figure_vertices[e[0]][0], self.figure_vertices[e[1]][0]]
+            ys = [self.figure_vertices[e[0]][1], self.figure_vertices[e[1]][1]]
+            plt.plot(xs, ys, '-', color='black')
 
 
 def load_table(filepath):
@@ -66,7 +66,7 @@ def load_table(filepath):
 if __name__ == "__main__":
 
     for prob_id in range(1, 79):
-        table = load_table(f"../data/debug/penalty_map_{prob_id}.txt")
+        table = load_table(f"../data/debug/penalty_neighbor_{prob_id}.txt")
         problem = Problem(f"../data/in/{prob_id}.json")
 
         n = len(table)
@@ -82,5 +82,5 @@ if __name__ == "__main__":
         problem.plot(plt)
         plt.plot([problem.figure_vertices[target_idx][0]], [
             problem.figure_vertices[target_idx][1]], 'o', color='red')
-        plt.savefig(f"../data/debug/penalty_contour_{prob_id}.png")
+        plt.savefig(f"../data/debug/neighbor_penalty_contour_{prob_id}.png")
         plt.cla()

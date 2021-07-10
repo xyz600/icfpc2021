@@ -21,12 +21,12 @@ fn dislike(problem: &Problem, pose: &Pose) -> f64 {
 
 fn penalty(hdc: &HoleDistanceCalculator, problem: &Problem, pose: &Pose, index: usize) -> f64 {
     let p = Point::new(pose.vertices[index].x, pose.vertices[index].y);
-    let mut sum = 100.0 * hdc.distance(&p);
+    let mut sum = hdc.distance(&p);
     // 周囲の辺の距離
     for &ni in problem.figure.neighbors[index].iter() {
-        let diff = (problem.figure.distance(ni, index) / pose.distance(ni, index) - 1.0).abs();
-        if diff > problem.epsilon * 0.9999 {
-            // sum += 1e8 * diff;
+        let diff = (pose.distance(ni, index) / problem.figure.distance(ni, index) - 1.0).abs();
+        if diff > problem.epsilon {
+            sum += diff;
         }
     }
     sum
@@ -59,8 +59,9 @@ fn main() {
             vertices: problem.figure.vertices.clone(),
         };
 
-        let mut writer =
-            BufWriter::new(File::create(format!("data/debug/penalty_map_{}.txt", id)).unwrap());
+        let mut writer = BufWriter::new(
+            File::create(format!("data/debug/penalty_neighbor_{}.txt", id)).unwrap(),
+        );
         let mut buffer = String::new();
         for iy in 0..=grid_size {
             let y = (max_y * iy as f64 + min_y * (grid_size - iy) as f64) / grid_size as f64;
