@@ -3,7 +3,6 @@ extern crate lib;
 const EPS: f64 = 1e-8;
 
 use lib::algorithm::{next_permutation, HoleDistanceCalculator};
-use lib::client::submit_problem;
 use lib::data::{Line, Point, Pose, Problem};
 use rand::prelude::ThreadRng;
 use rand::Rng;
@@ -24,7 +23,7 @@ fn is_acceptable(problem: &Problem, vertex_map: &Vec<usize>) -> bool {
             let p1 = problem.hole.vertices[vertex_map[e.1]];
             p0.distance2(&p1)
         };
-        if (new_dist / old_dist - 1.0).abs() >= problem.epsilon {
+        if (new_dist / old_dist - 1.0).abs() > problem.epsilon {
             return false;
         }
     }
@@ -90,6 +89,17 @@ struct SolverProblem {
     figure_neighbors: Vec<Vec<usize>>,
 }
 
+fn average(vs: &Vec<Point>) -> Point {
+    let mut sum = Point::new(0.0, 0.0);
+    for i in vs.iter() {
+        sum.y += i.y;
+        sum.x += i.x;
+    }
+    sum.y /= vs.len() as f64;
+    sum.x /= vs.len() as f64;
+    sum
+}
+
 impl SolverProblem {
     fn new(problem: &Problem) -> SolverProblem {
         let mut ret = SolverProblem {
@@ -102,6 +112,13 @@ impl SolverProblem {
             orig_figure_vertices: vec![],
             figure_neighbors: problem.figure.neighbors.clone(),
         };
+        // average shift
+        let hole_average = average(&problem.hole.vertices);
+        let figure_average = average(&problem.figure.vertices);
+        let shift = Point::new(
+            (hole_average.x - figure_average.x).round(),
+            (hole_average.y - figure_average.y).round(),
+        );
 
         // 登場座標が (0, 0) で最小になるような調整
         let mut min_x = std::i64::MAX;
@@ -112,8 +129,8 @@ impl SolverProblem {
             min_y = min_y.min(p.y as i64);
         }
         for p in problem.figure.vertices.iter() {
-            min_x = min_x.min(p.x as i64);
-            min_y = min_y.min(p.y as i64);
+            min_x = min_x.min((p.x + shift.x) as i64);
+            min_y = min_y.min((p.y + shift.y) as i64);
         }
 
         ret.offset_y = min_y;
@@ -130,8 +147,8 @@ impl SolverProblem {
         }
 
         for p in problem.figure.vertices.iter() {
-            let x = p.x as i64 - min_x;
-            let y = p.y as i64 - min_y;
+            let x = (p.x + shift.x) as i64 - min_x;
+            let y = (p.y + shift.y) as i64 - min_y;
 
             ret.height = ret.height.max((y + 1) as usize);
             ret.width = ret.width.max((x + 1) as usize);
@@ -407,7 +424,7 @@ fn solve2(_problem: &Problem, _seed: u64, timeout: u128, problem_id: usize) -> O
 
 fn main() {
     if false {
-        let id = 3;
+        let id = 15;
         let problem = Problem::from_file(format!("data/in/{}.json", id).as_str());
         println!("load problem {}:", id);
         if let Some(pose) = solve2(&problem, 0, 10000, id) {
@@ -416,7 +433,7 @@ fn main() {
         return;
     }
 
-    let max_id = 106;
+    let max_id = 132;
 
     {
         // solve
