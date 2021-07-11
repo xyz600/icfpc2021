@@ -241,7 +241,7 @@ fn penalty(problem: &SolverProblem, sol: &Solution, epsilon: f64) -> (f64, f64, 
 fn evaluate_all(problem: &SolverProblem, sol: &Solution, epsilon: f64) -> f64 {
     let (p0, p1, p2) = penalty(problem, sol, epsilon);
 
-    let scale = 2e-3;
+    let scale = 1e-4;
     let score_penalty_rate = 100.0;
     let p01_rate = 10.0;
     let p02_rate = 100.0;
@@ -395,18 +395,19 @@ fn solve2(_problem: &Problem, _seed: u64, timeout: u128, problem_id: usize) -> O
     let (p0, p1, p2) = penalty(&problem, &best_solution, _problem.epsilon);
     println!("penalty: {} {} {}", p0, p1, p2);
 
+    let pose = best_solution.to_pose(&problem);
     if p0 + p1 + p2 < EPS {
         save_to_best(&problem, &best_solution, problem_id);
-        let pose = best_solution.to_pose(&problem);
         Some(pose)
     } else {
+        pose.save_file(format!("data/out/{}.json", problem_id));
         None
     }
 }
 
 fn main() {
     if false {
-        let id = 2;
+        let id = 3;
         let problem = Problem::from_file(format!("data/in/{}.json", id).as_str());
         println!("load problem {}:", id);
         if let Some(pose) = solve2(&problem, 0, 10000, id) {
@@ -417,15 +418,17 @@ fn main() {
 
     let max_id = 106;
 
-    // solve
-    (1..=max_id)
-        .collect::<Vec<usize>>()
-        .par_iter()
-        .for_each(|id| {
-            let problem = Problem::from_file(format!("data/in/{}.json", id).as_str());
-            println!("load problem {}:", id);
-            if let Some(_pose) = solve(&problem) {
-            } else if let Some(_pose) = solve2(&problem, 0, 60000, *id) {
-            }
-        });
+    {
+        // solve
+        (1..=max_id)
+            .collect::<Vec<usize>>()
+            .par_iter()
+            .for_each(|id| {
+                let problem = Problem::from_file(format!("data/in/{}.json", id).as_str());
+                println!("load problem {}:", id);
+                if let Some(_pose) = solve(&problem) {
+                } else if let Some(_pose) = solve2(&problem, 0, 60000, *id) {
+                }
+            });
+    }
 }
