@@ -4,7 +4,7 @@ const EPS: f64 = 1e-8;
 
 use lib::algorithm::{next_permutation, HoleDistanceCalculator};
 use lib::client::submit_problem;
-use lib::data::{Point, Pose, Problem};
+use lib::data::{Line, Point, Pose, Problem};
 use rand::prelude::ThreadRng;
 use rand::Rng;
 use rayon::prelude::*;
@@ -49,10 +49,8 @@ fn solve(problem: &Problem) -> Option<Pose> {
                 break;
             }
         }
-        println!("cannot find matching v1.");
         None
     } else {
-        println!("vertex size is difference from old one. v1");
         None
     }
 }
@@ -72,6 +70,9 @@ impl Pos {
         let dy = self.y.max(p.y) - self.y.min(p.y);
         let dx = self.x.max(p.x) - self.x.min(p.x);
         dy * dy + dx * dx
+    }
+    fn to_point(&self) -> Point {
+        Point::new(self.x as f64, self.y as f64)
     }
 }
 
@@ -211,6 +212,27 @@ fn penalty(problem: &SolverProblem, sol: &Solution, epsilon: f64) -> (f64, f64, 
     }
     // 構成する辺が、hole の辺と被ってはいけない
     let mut p2 = 0.0;
+    let n = sol.vertices.len();
+    let m = problem.hole_vertices.len();
+
+    for i in 0..n {
+        for &j in problem.figure_neighbors[i].iter() {
+            let v1 = sol.vertices[i].to_point();
+            let v2 = sol.vertices[j].to_point();
+            let l1 = Line::new(v1, v2);
+
+            for hi in 0..m {
+                let nhi = (hi + 1) % m;
+                let v3 = problem.hole_vertices[hi].to_point();
+                let v4 = problem.hole_vertices[nhi].to_point();
+                let l2 = Line::new(v3, v4);
+
+                if l1.intersect(&l2) {
+                    p2 += 1.0;
+                }
+            }
+        }
+    }
 
     (p0, p1, p2)
 }
@@ -221,8 +243,9 @@ fn evaluate_all(problem: &SolverProblem, sol: &Solution, epsilon: f64) -> f64 {
     let scale = 1e-4;
     let score_penalty_rate = 100.0;
     let p01_rate = 10.0;
+    let p02_rate = 100.0;
 
-    (dislike(problem, sol) + (p0 + p1 * p01_rate + p2) * score_penalty_rate) * scale
+    (dislike(problem, sol) + (p0 + p1 * p01_rate + p2 * p02_rate) * score_penalty_rate) * scale
 }
 
 fn solve2(_problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
@@ -346,20 +369,21 @@ fn solve2(_problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
 
 fn main() {
     // solve
-    let pose_list = (1..79)
+    let pose_list = (1..107)
         .collect::<Vec<usize>>()
         .par_iter()
         .map(|id| -> Option<Pose> {
             let problem = Problem::from_file(format!("data/in/{}.json", id).as_str());
             println!("load problem {}:", id);
             if let Some(pose) = solve(&problem) {
+                pose.save_file(format!("data/out/{}.json", id));
                 return Some(pose);
-            } else if let Some(pose) = solve2(&problem, 0, 60000) {
+            } else if let Some(pose) = solve2(&problem, 0, 10000) {
+                pose.save_file(format!("data/out/{}.json", id));
                 return Some(pose);
             } else {
-                println!("fail to find solution");
+                None
             }
-            None
         })
         .collect::<Vec<Option<Pose>>>();
 
