@@ -585,7 +585,7 @@ impl AngleManager {
 fn test_visible_area() {
     let base = Point::new(1.0, 1.0);
 
-    let mut ps = vec![
+    let ps = vec![
         Point::new(0.0, 0.0),
         Point::new(0.0, 2.0),
         Point::new(2.0, 2.0),
@@ -597,4 +597,52 @@ fn test_visible_area() {
     let mut angle_manager = AngleManager::new(&ps, &base);
     let ans = angle_manager.doIt();
     println!("{:?}", ans);
+}
+
+pub fn check_visibility(pos_list: &Vec<Point>, base: &Point) -> Vec<Point> {
+    let visible = |p: &Point| -> bool {
+        let n = pos_list.len();
+        for i in 0..pos_list.len() {
+            let p1 = pos_list[i];
+            let p2 = pos_list[(i + 1) % n];
+
+            let l0 = Line::new(p1, p2);
+            let l1 = Line::new(*base, *p);
+
+            if l0.intersect(&l1) {
+                return false;
+            }
+        }
+        true
+    };
+
+    let mut vec = vec![];
+    for p in pos_list.iter() {
+        if visible(p) {
+            vec.push(*p);
+        }
+    }
+    vec
+}
+
+#[test]
+fn test_visibility1() {
+    let base = Point::new(1.0, 1.0);
+
+    let ps = vec![
+        Point::new(0.0, 0.0),
+        Point::new(0.0, 2.0),
+        Point::new(2.0, 2.0),
+        Point::new(2.0, 4.0),
+        Point::new(4.0, 4.0),
+        Point::new(4.0, 0.0),
+    ];
+
+    let ret = check_visibility(&ps, &base);
+    assert_eq!(ret.len(), 5);
+
+    let base = Point::new(0.0, 1.0);
+    let ret = check_visibility(&ps, &base);
+    assert_eq!(ret.len(), 4);
+    println!("{:?}", ret);
 }
