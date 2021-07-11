@@ -175,6 +175,18 @@ impl Line {
         s * t < 0.0
     }
 
+    pub fn intersect_point(&self, line: &Line) -> Option<Point> {
+        if self.intersect(line) {
+            let a = self.p0;
+            let b = self.p1;
+            let c = line.p0;
+            let d = line.p1;
+            Some(a + (b - a) * (a - c).cross(&(d - c)) / (d - c).cross(&(b - a)))
+        } else {
+            None
+        }
+    }
+
     pub fn cross(&self, line: &Line) -> f64 {
         self.dx() * line.dy() - line.dx() * self.dy()
     }
@@ -197,6 +209,26 @@ impl Line {
             // 端点のどちらかが近い
             self.p0.distance(p).min(self.p1.distance(p))
         }
+    }
+}
+
+#[test]
+fn test_line_cross_point() {
+    let p0 = Point::new(0.0, 0.0);
+    let p1 = Point::new(1.0, 1.0);
+    let p2 = Point::new(1.0, 0.0);
+    let p3 = Point::new(0.0, 1.0);
+
+    let l0 = Line::new(p0, p1);
+    let l1 = Line::new(p2, p3);
+
+    let maybe_c = l0.intersect_point(&l1);
+
+    if let Some(c) = maybe_c {
+        assert!((c.x - 0.5).abs() < EPS);
+        assert!((c.y - 0.5).abs() < EPS);
+    } else {
+        panic!();
     }
 }
 

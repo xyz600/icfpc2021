@@ -1,4 +1,4 @@
-use crate::data::{Hole, Point, Triangle};
+use crate::data::{Hole, Line, Point, Triangle};
 
 const EPS: f64 = 1e-8;
 
@@ -198,3 +198,299 @@ fn test_hole_distance() {
     let p = Point::new(-1.0, 0.0);
     assert!((hdc.distance(&p) - 1.0f64.sqrt()).abs() < EPS);
 }
+
+#[derive(Clone, Copy)]
+struct AngleRangeInfo {
+    start_index: usize,
+    end_index: usize,
+    start_angle: f64,
+    end_angle: f64,
+    start_pos: Point,
+    end_pos: Point,
+}
+
+impl AngleRangeInfo {
+    fn new() -> AngleRangeInfo {
+        AngleRangeInfo {
+            start_index: 0,
+            end_index: 0,
+            start_angle: 0.0,
+            end_angle: 0.0,
+            start_pos: Point::new(0.0, 0.0),
+            end_pos: Point::new(0.0, 0.0),
+        }
+    }
+}
+
+struct AngleManager {
+    angle_list: Vec<f64>,
+    distance_list: Vec<f64>,
+    vertices: Vec<Point>,
+    angle_range: Vec<AngleRangeInfo>,
+    base: Point,
+    base_index: usize,
+}
+
+impl AngleManager {
+    fn new(vertices: &Vec<Point>, base: &Point) -> AngleManager {
+        let mut manager = AngleManager {
+            angle_list: vec![],
+            vertices: vertices.clone(),
+            distance_list: vec![],
+            angle_range: vec![],
+            base: *base,
+            base_index: 0,
+        };
+        for i in 0..vertices.len() {
+            manager
+                .angle_list
+                .push(AngleManager::calculate_angle(vertices[i] - *base));
+            manager.distance_list.push(vertices[i].distance(base));
+        }
+        manager
+    }
+
+    fn calculate_angle(v: Point) -> f64 {
+        let v = v.normalize();
+        if v.y >= 0.0 {
+            v.x.acos()
+        } else {
+            std::f64::consts::PI + v.x.acos()
+        }
+    }
+
+    fn normalize(&mut self, first_index: usize) {
+        // 最初の index を偏角 0 にしたい
+        for i in 0..self.angle_list.len() {
+            self.angle_list[i] -= self.angle_list[first_index];
+            if self.angle_list[i] < 0.0 {
+                self.angle_list[i] += 2.0 * std::f64::consts::PI;
+            }
+        }
+        self.base_index = first_index;
+    }
+
+    fn detect_range(&self, angle: f64) -> Option<usize> {
+        // 区間に range が同じものが含まれる場合、スキップされる
+        for i in 0..self.angle_range.len() {
+            if self.angle_range[i].start_angle <= angle && angle < self.angle_range[i].end_angle {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    fn angle(&self, idx: usize) -> f64 {
+        self.angle_list[idx]
+    }
+
+    fn distance(&self, idx: usize) -> f64 {
+        self.distance_list[idx]
+    }
+
+    fn current_distance(&self, angle: f64) -> Option<f64> {
+        if let Some(index) = self.detect_range(angle) {
+            let n = self.angle_list.len();
+
+            let arc = &self.angle_range[index];
+            let max_dist =
+                self.distance_list[arc.start_index].max(self.distance_list[arc.end_index]);
+
+            let mut p = self.base;
+            p.y += angle.sin() * max_dist;
+            p.x += angle.cos() * max_dist;
+
+            let l0 = Line::new(self.base, p);
+            let l1 = Line::new(self.vertices[arc.start_index], self.vertices[arc.end_index]);
+            if let Some(v) = l1.intersect_point(&l0) {
+                Some(v.distance(&self.base))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    // angle の地点で区間を分割し、分割後の小さい index を返す
+    fn split_range(&mut self, angle: f64) -> usize {
+        let dist = self.current_distance(angle).unwrap();
+
+        let idx = self.detect_range(angle).unwrap();
+        self.angle_range.insert(idx, self.angle_range[idx].clone());
+        let nidx = idx + 1;
+        let mut new_point = self.base;
+        new_point.y += angle.sin() * dist;
+        new_point.x += angle.cos() * dist;
+        self.angle_range[idx].end_angle = angle;
+        self.angle_range[idx].end_pos = new_point;
+        self.angle_range[nidx].start_angle = angle;
+        self.angle_range[nidx].start_pos = new_point;
+
+        idx
+    }
+
+    fn merge(&mut self) {
+        let mut index = 0;
+        while index + 1 < self.angle_range.len() {
+            let nindex = index + 1;
+            if self.angle_range[index].start_index == self.angle_range[nindex].start_index
+                && self.angle_range[index].end_index == self.angle_range[nindex].end_index
+            {
+                self.angle_range[nindex].start_angle = self.angle_range[index].start_angle;
+                self.angle_range[nindex].start_pos = self.angle_range[index].start_pos;
+                self.angle_range.remove(index);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    fn push(&mut self, idx: usize) {
+        let n = self.vertices.len();
+        let next = |i: usize| -> usize { (i + 1) % n };
+        let prev = |i: usize| -> usize { (i + n - 1) % n };
+
+        let nidx = next(idx);
+
+        let sa = self.angle(idx);
+        let mut ea = self.angle(nidx);
+
+        if nidx == self.base_index {
+            ea += std::f64::consts::PI * 2.0;
+        }
+        let ea = ea;
+
+        let min_a = sa.min(ea);
+        let max_a = sa.max(ea);
+
+        let min_idx = if min_a == sa { idx } else { nidx };
+        let max_idx = if max_a == sa { idx } else { nidx };
+
+        if self.largest_angle() <= min_a {
+            let mut info = AngleRangeInfo::new();
+            info.start_index = min_idx;
+            info.start_angle = min_a;
+            info.start_pos = self.vertices[min_idx];
+            info.end_index = max_idx;
+            info.end_angle = max_a;
+            info.end_pos = self.vertices[max_idx];
+            self.angle_range.push(info);
+        } else {
+            // 開始 index が中途半端なら merge
+            let mut start_index = self.detect_range(min_a).unwrap();
+            if self.angle_range[start_index].start_angle < min_a
+                && min_a < self.angle_range[start_index].end_angle
+            {
+                self.split_range(min_a);
+                start_index += 1;
+            }
+
+            let end_index = self.detect_range(max_a).unwrap();
+            if self.angle_range[end_index].start_angle < max_a
+                && max_a < self.angle_range[end_index].end_angle
+            {
+                self.split_range(max_a);
+                // 開始 index はずれるけど、終了 index はずれない
+            }
+
+            let mut split_offset = 0;
+
+            // 引っかかる全ての区間が対象
+            for i in start_index..=end_index {
+                let i = i + split_offset;
+
+                let osa = self.angle_range[i].start_angle;
+                let oea = self.angle_range[i].end_angle;
+                let orig_start_dist = self.current_distance(osa).unwrap();
+                let orig_end_dist = self.current_distance(oea).unwrap();
+                let new_start_dist = self.distance(min_idx);
+                let new_end_dist = self.distance(max_idx);
+
+                if new_start_dist < orig_start_dist && new_end_dist < orig_end_dist {
+                    // 最初も最後も近ければ、既存のものを全て書き換え
+                    self.angle_range[i].start_index = min_idx;
+                    self.angle_range[i].start_pos = self.vertices[min_idx];
+                    self.angle_range[i].end_index = max_idx;
+                    self.angle_range[i].end_pos = self.vertices[max_idx];
+                } else if new_start_dist >= orig_start_dist && new_end_dist >= orig_end_dist {
+                    // 最初も最後も遠ければ、何もしない
+                } else {
+                    let p0 = self.vertices[min_idx];
+                    let p1 = self.vertices[max_idx];
+                    let p2 = self.angle_range[i].start_pos;
+                    let p3 = self.angle_range[i].end_pos;
+
+                    let l0 = Line::new(p0, p1);
+                    let l1 = Line::new(p2, p3);
+
+                    if let Some(v) = l0.intersect_point(&l1) {
+                        let angle = AngleManager::calculate_angle(v);
+                        self.split_range(angle);
+                        split_offset += 1;
+
+                        if new_start_dist < orig_start_dist && new_end_dist >= orig_end_dist {
+                            // 最後だけ近い場合は、その交点を見つけてそこで区間を分割
+                            self.angle_range[i].start_index = min_idx;
+                            self.angle_range[i].start_pos = self.vertices[min_idx];
+                            self.angle_range[i].end_index = max_idx;
+                            self.angle_range[i].end_pos = self.vertices[max_idx];
+                        } else if new_start_dist >= orig_start_dist && new_end_dist < orig_end_dist
+                        {
+                            // 最後だけ近い場合は、その交点を見つけてそこで区間を分割
+                            self.angle_range[i + 1].start_index = min_idx;
+                            self.angle_range[i + 1].start_pos = self.vertices[min_idx];
+                            self.angle_range[i + 1].end_index = max_idx;
+                            self.angle_range[i + 1].end_pos = self.vertices[max_idx];
+                        }
+                    } else {
+                        panic!();
+                    }
+                }
+            }
+            self.merge();
+        }
+    }
+
+    fn largest_angle(&self) -> f64 {
+        if let Some(arc) = self.angle_range.last() {
+            arc.end_angle
+        } else {
+            0.0
+        }
+    }
+
+    pub fn doIt(&mut self) -> Vec<Point> {
+        // 点列が多角形を構成している
+        // ここから、可視領域を示す多角形を返す
+
+        let n = self.vertices.len();
+
+        // 最初に選択する index
+        let first_idx = {
+            let mut idx = 0;
+            let mut min_dist = std::f64::MAX;
+            for i in 0..n {
+                let dist = self.base.distance(&self.vertices[i]);
+                if dist < min_dist {
+                    min_dist = dist;
+                    idx = i;
+                }
+            }
+            idx
+        };
+
+        for i in 0..n {
+            self.push((first_idx + i) % n);
+        }
+
+        let mut ans = vec![];
+        for info in self.angle_range.iter() {
+            ans.push(info.start_pos);
+        }
+        ans
+    }
+}
+
+#[test]
+fn test_visible_area() {}
