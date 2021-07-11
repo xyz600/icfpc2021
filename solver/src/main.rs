@@ -67,10 +67,10 @@ impl Pos {
         Pos { x: x, y: y }
     }
 
-    fn distance(&self, p: &Pos) -> f64 {
+    fn distance(&self, p: &Pos) -> i64 {
         let dy = self.y.max(p.y) - self.y.min(p.y);
         let dx = self.x.max(p.x) - self.x.min(p.x);
-        ((dy * dy + dx * dx) as f64).sqrt()
+        dy * dy + dx * dx
     }
 }
 
@@ -143,13 +143,14 @@ impl SolverProblem {
                 let orig_x = (x as i64 + ret.offset_x) as f64;
                 let orig_y = (y as i64 + ret.offset_y) as f64;
                 let p = Point::new(orig_x, orig_y);
-                ret.hole_distance[y][x] = hdc.distance(&p) as usize;
+                let d = hdc.distance(&p);
+                ret.hole_distance[y][x] = (d * d).round() as usize;
             }
         }
         ret
     }
 
-    fn figure_distance(&self, i: usize, j: usize) -> f64 {
+    fn figure_distance(&self, i: usize, j: usize) -> i64 {
         self.orig_figure_vertices[i].distance(&self.orig_figure_vertices[j])
     }
 }
@@ -178,18 +179,18 @@ impl Solution {
 }
 
 fn dislike(problem: &SolverProblem, sol: &Solution) -> f64 {
-    let mut sum = 0.0;
+    let mut sum = 0;
     for hv in problem.hole_vertices.iter() {
-        let mut dist = std::f64::MAX;
+        let mut dist = std::i64::MAX;
         for pv in sol.vertices.iter() {
             dist = dist.min(pv.distance(hv));
         }
         sum += dist;
     }
-    sum
+    sum as f64
 }
 
-fn penalty(problem: &SolverProblem, sol: &Solution, epsilon: f64) -> (f64, f64) {
+fn penalty(problem: &SolverProblem, sol: &Solution, epsilon: f64) -> (f64, f64, f64) {
     // 穴の内部からの距離
     let mut p0 = 0.0;
     for pos in sol.vertices.iter() {
@@ -203,16 +204,24 @@ fn penalty(problem: &SolverProblem, sol: &Solution, epsilon: f64) -> (f64, f64) 
             let cur_dist = sol.vertices[i].distance(&sol.vertices[ni]);
             let rate = (cur_dist as f64 / orig_dist as f64 - 1.0).abs();
             if rate > epsilon {
-                p1 += rate;
+                p1 += rate * orig_dist as f64;
             }
         }
     }
-    (p0, p1)
+    // 構成する辺が、hole の辺と被ってはいけない
+    let mut p2 = 0.0;
+
+    (p0, p1, p2)
 }
 
 fn evaluate_all(problem: &SolverProblem, sol: &Solution, epsilon: f64) -> f64 {
-    let (p0, p1) = penalty(problem, sol, epsilon);
-    dislike(problem, sol) + (p0 + p1 * 100.0) * 100.0
+    let (p0, p1, p2) = penalty(problem, sol, epsilon);
+
+    let scale = 1e-4;
+    let score_penalty_rate = 100.0;
+    let p01_rate = 10.0;
+
+    (dislike(problem, sol) + (p0 + p1 * p01_rate + p2) * score_penalty_rate) * scale
 }
 
 fn solve2(_problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
@@ -247,7 +256,7 @@ fn solve2(_problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
     loop {
         let method = rng.gen::<usize>() % 1000;
 
-        if method <= 900 {
+        if method <= 950 {
             // 1頂点の場所移動
             // 90%
 
@@ -320,13 +329,13 @@ fn solve2(_problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
     }
 
     println!("counter = {}", counter);
-    println!("score: {}", best_eval);
-    println!(
-        "penalty: {:?}",
-        penalty(&problem, &best_solution, _problem.epsilon)
-    );
-    let (p0, p1) = penalty(&problem, &best_solution, _problem.epsilon);
-    if p0 + p1 < EPS {
+    println!("score: {}", dislike(&problem, &best_solution));
+    let (p0, p1, p2) = penalty(&problem, &best_solution, _problem.epsilon, true);
+    println!("penalty: {} {} {}", p0, p1, p2);
+    let pose = best_solution.to_pose(&problem);
+    println!("{}", pose.to_json());
+
+    if p0 + p1 + p2 < EPS {
         let pose = best_solution.to_pose(&problem);
         Some(pose)
     } else {
@@ -343,7 +352,7 @@ fn main() {
             if let Err(_msg) = submit_problem(id, &pose) {
                 panic!("fail to submit problem {}", id);
             }
-        } else if let Some(pose) = solve2(&problem, 0, 15000) {
+        } else if let Some(pose) = solve2(&problem, 0, 10000) {
             println!("submit problem 2! {}", id);
             if let Err(_msg) = submit_problem(id, &pose) {
                 panic!("fail to submit problem 2 {}", id);
