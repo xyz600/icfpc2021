@@ -1,6 +1,6 @@
 use serde_json::Value;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::ops::{Add, Div, Mul, Sub};
 
 const EPS: f64 = 1e-8;
@@ -595,6 +595,13 @@ impl Pose {
         buffer += vertices_to_json(&self.vertices).as_str();
         buffer += "}";
         buffer
+    }
+
+    pub fn save_file(&self, filepath: String) {
+        let mut writer = BufWriter::new(File::create(filepath.as_str()).unwrap());
+        if let Err(_msg) = writer.write(self.to_json().as_bytes()) {
+            panic!("fail to save result");
+        }
     }
 }
 
