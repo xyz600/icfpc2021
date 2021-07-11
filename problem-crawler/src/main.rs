@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 
 fn main() {
-    (1..107).collect::<Vec<usize>>().par_iter().for_each(|&id| {
+    (1..133).collect::<Vec<usize>>().par_iter().for_each(|&id| {
         let maybe_problem = get_problem(id);
         if let Ok(problem) = maybe_problem {
             let file = File::create(format!("data/in/{}.json", id)).unwrap();
