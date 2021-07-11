@@ -1,11 +1,12 @@
 extern crate lib;
 
 use lib::client::get_problem;
+use rayon::prelude::*;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
 fn main() {
-    for id in 1..60 {
+    (1..107).collect::<Vec<usize>>().par_iter().for_each(|&id| {
         let maybe_problem = get_problem(id);
         if let Ok(problem) = maybe_problem {
             let file = File::create(format!("data/in/{}.json", id)).unwrap();
@@ -17,5 +18,5 @@ fn main() {
         } else {
             panic!("problem cannot downloaded.");
         }
-    }
+    });
 }

@@ -7,3 +7,4 @@ edition = "2018"
 
 [dependencies]
 lib = { path = "../lib" }
+rayon = "1.5.1"
