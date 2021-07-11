@@ -368,8 +368,10 @@ fn solve2(_problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
 }
 
 fn main() {
+    let max_id = 106;
+
     // solve
-    let pose_list = (1..107)
+    let pose_list = (1..=107)
         .collect::<Vec<usize>>()
         .par_iter()
         .map(|id| -> Option<Pose> {
@@ -378,7 +380,7 @@ fn main() {
             if let Some(pose) = solve(&problem) {
                 pose.save_file(format!("data/out/{}.json", id));
                 return Some(pose);
-            } else if let Some(pose) = solve2(&problem, 0, 10000) {
+            } else if let Some(pose) = solve2(&problem, 0, 60000) {
                 pose.save_file(format!("data/out/{}.json", id));
                 return Some(pose);
             } else {
@@ -390,7 +392,7 @@ fn main() {
     // submit
     pose_list
         .par_iter()
-        .zip(1..79)
+        .zip(1..max_id + 1)
         .for_each(|(maybe_pose, id)| {
             if let Some(pose) = maybe_pose {
                 if let Err(_msg) = submit_problem(id, pose) {
