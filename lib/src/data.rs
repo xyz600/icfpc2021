@@ -47,7 +47,7 @@ impl Point {
     }
 
     pub fn eq(&self, p: &Point) -> bool {
-        self.x == p.x && self.y == p.y
+        (self.x - p.x).abs() < EPS && (self.y - p.y).abs() < EPS
     }
 
     pub fn ccw(a: &Point, b: &Point, c: &Point) -> i64 {

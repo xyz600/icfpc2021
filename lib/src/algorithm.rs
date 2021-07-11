@@ -203,7 +203,9 @@ fn test_hole_distance() {
 struct AngleRangeInfo {
     start_index: usize,
     end_index: usize,
+    // inclusive
     start_angle: f64,
+    // exclusive
     end_angle: f64,
     start_pos: Point,
     end_pos: Point,
@@ -231,6 +233,8 @@ struct AngleManager {
     base_index: usize,
 }
 
+const NONE: usize = std::usize::MAX;
+
 impl AngleManager {
     fn new(vertices: &Vec<Point>, base: &Point) -> AngleManager {
         let mut manager = AngleManager {
@@ -247,6 +251,13 @@ impl AngleManager {
                 .push(AngleManager::calculate_angle(vertices[i] - *base));
             manager.distance_list.push(vertices[i].distance(base));
         }
+        let mut info = AngleRangeInfo::new();
+        info.start_angle = 0.0;
+        info.start_index = NONE;
+        info.end_angle = std::f64::consts::PI * 2.0;
+        info.end_index = NONE;
+        manager.angle_range.push(info);
+
         manager
     }
 
@@ -255,14 +266,15 @@ impl AngleManager {
         if v.y >= 0.0 {
             v.x.acos()
         } else {
-            std::f64::consts::PI + v.x.acos()
+            std::f64::consts::PI * 2.0 - v.x.acos()
         }
     }
 
     fn normalize(&mut self, first_index: usize) {
         // 最初の index を偏角 0 にしたい
+        let shift = self.angle_list[first_index];
         for i in 0..self.angle_list.len() {
-            self.angle_list[i] -= self.angle_list[first_index];
+            self.angle_list[i] -= shift;
             if self.angle_list[i] < 0.0 {
                 self.angle_list[i] += 2.0 * std::f64::consts::PI;
             }
@@ -272,8 +284,34 @@ impl AngleManager {
 
     fn detect_range(&self, angle: f64) -> Option<usize> {
         // 区間に range が同じものが含まれる場合、スキップされる
-        for i in 0..self.angle_range.len() {
-            if self.angle_range[i].start_angle <= angle && angle < self.angle_range[i].end_angle {
+        for i in (0..self.angle_range.len()).rev() {
+            if self.angle_range[i].start_angle == self.angle_range[i].end_angle
+                && self.angle_range[i].end_angle == angle
+            {
+                return Some(i);
+            } else if self.angle_range[i].start_angle <= angle
+                && angle < self.angle_range[i].end_angle
+            {
+                return Some(i);
+            }
+        }
+        // 苦しいけど、 2.0 * PI のクエリが来たら最後にする
+        if angle == self.angle_range.last().unwrap().end_angle {
+            return Some(self.angle_range.len() - 1);
+        }
+        None
+    }
+
+    fn detect_end_range(&self, angle: f64) -> Option<usize> {
+        // 区間に range が同じものが含まれる場合、スキップされる
+        for i in (0..self.angle_range.len()).rev() {
+            if self.angle_range[i].start_angle == self.angle_range[i].end_angle
+                && self.angle_range[i].end_angle == angle
+            {
+                return Some(i);
+            } else if self.angle_range[i].start_angle < angle
+                && angle <= self.angle_range[i].end_angle
+            {
                 return Some(i);
             }
         }
@@ -288,17 +326,35 @@ impl AngleManager {
         self.distance_list[idx]
     }
 
+    fn sin2PI(&self, angle: f64) -> f64 {
+        if angle < std::f64::consts::PI {
+            angle.sin()
+        } else {
+            -angle.sin()
+        }
+    }
+
+    fn cos2PI(&self, angle: f64) -> f64 {
+        if angle < std::f64::consts::PI {
+            angle.cos()
+        } else {
+            (std::f64::consts::PI * 2.0 - angle).cos()
+        }
+    }
+
     fn current_distance(&self, angle: f64) -> Option<f64> {
         if let Some(index) = self.detect_range(angle) {
-            let n = self.angle_list.len();
-
             let arc = &self.angle_range[index];
+            if arc.start_index == NONE {
+                // 想定はしているので None ではない
+                return Some(std::f64::MAX);
+            }
             let max_dist =
                 self.distance_list[arc.start_index].max(self.distance_list[arc.end_index]);
 
             let mut p = self.base;
-            p.y += angle.sin() * max_dist;
-            p.x += angle.cos() * max_dist;
+            p.y += self.sin2PI(angle) * max_dist;
+            p.x += self.cos2PI(angle) * max_dist;
 
             let l0 = Line::new(self.base, p);
             let l1 = Line::new(self.vertices[arc.start_index], self.vertices[arc.end_index]);
@@ -320,8 +376,8 @@ impl AngleManager {
         self.angle_range.insert(idx, self.angle_range[idx].clone());
         let nidx = idx + 1;
         let mut new_point = self.base;
-        new_point.y += angle.sin() * dist;
-        new_point.x += angle.cos() * dist;
+        new_point.y += self.sin2PI(angle) * dist;
+        new_point.x += self.cos2PI(angle) * dist;
         self.angle_range[idx].end_angle = angle;
         self.angle_range[idx].end_pos = new_point;
         self.angle_range[nidx].start_angle = angle;
@@ -346,20 +402,88 @@ impl AngleManager {
         }
     }
 
+    fn push_range(&mut self, min_idx: usize, max_idx: usize, min_a: f64, max_a: f64) {
+        // 0度ラインをまたがない保証がある
+
+        // 開始 index が中途半端なら slpit
+        let mut start_index = self.detect_range(min_a).unwrap();
+        if self.angle_range[start_index].start_angle < min_a {
+            self.split_range(min_a);
+            start_index += 1;
+        }
+        let end_index = self.detect_end_range(max_a).unwrap();
+        if self.angle_range[end_index].end_angle < max_a {
+            self.split_range(max_a);
+        }
+
+        // query とピッタリの区間が必ず存在する保証がある
+
+        let mut split_offset = 0;
+
+        // 引っかかる全ての区間が対象
+        for i in start_index..=end_index {
+            let i = i + split_offset;
+
+            let osa = self.angle_range[i].start_angle;
+            let oea = self.angle_range[i].end_angle;
+            let orig_start_dist = self.current_distance(osa).unwrap();
+            let orig_end_dist = self.current_distance(oea).unwrap();
+            let new_start_dist = self.distance(min_idx);
+            let new_end_dist = self.distance(max_idx);
+
+            if new_start_dist < orig_start_dist && new_end_dist < orig_end_dist {
+                // 最初も最後も近ければ、既存のものを全て書き換え
+                self.angle_range[i].start_index = min_idx;
+                self.angle_range[i].start_pos = self.vertices[min_idx];
+                self.angle_range[i].end_index = max_idx;
+                self.angle_range[i].end_pos = self.vertices[max_idx];
+            } else if new_start_dist >= orig_start_dist && new_end_dist >= orig_end_dist {
+                // 最初も最後も遠ければ、何もしない
+            } else {
+                let p0 = self.vertices[min_idx];
+                let p1 = self.vertices[max_idx];
+                let p2 = self.angle_range[i].start_pos;
+                let p3 = self.angle_range[i].end_pos;
+
+                let l0 = Line::new(p0, p1);
+                let l1 = Line::new(p2, p3);
+
+                if let Some(v) = l0.intersect_point(&l1) {
+                    let angle = AngleManager::calculate_angle(v);
+                    self.split_range(angle);
+                    split_offset += 1;
+
+                    if new_start_dist < orig_start_dist && new_end_dist > orig_end_dist {
+                        // 最後だけ近い場合は、その交点を見つけてそこで区間を分割
+                        self.angle_range[i].start_index = min_idx;
+                        self.angle_range[i].start_pos = self.vertices[min_idx];
+                        self.angle_range[i].end_index = max_idx;
+                        self.angle_range[i].end_pos = self.vertices[max_idx];
+                    } else if new_start_dist > orig_start_dist && new_end_dist < orig_end_dist {
+                        // 最後だけ近い場合は、その交点を見つけてそこで区間を分割
+                        self.angle_range[i + 1].start_index = min_idx;
+                        self.angle_range[i + 1].start_pos = self.vertices[min_idx];
+                        self.angle_range[i + 1].end_index = max_idx;
+                        self.angle_range[i + 1].end_pos = self.vertices[max_idx];
+                    }
+                } else {
+                    panic!();
+                }
+            }
+        }
+        self.merge();
+    }
+
     fn push(&mut self, idx: usize) {
         let n = self.vertices.len();
         let next = |i: usize| -> usize { (i + 1) % n };
-        let prev = |i: usize| -> usize { (i + n - 1) % n };
 
         let nidx = next(idx);
 
-        let sa = self.angle(idx);
-        let mut ea = self.angle(nidx);
+        const PI: f64 = std::f64::consts::PI;
 
-        if nidx == self.base_index {
-            ea += std::f64::consts::PI * 2.0;
-        }
-        let ea = ea;
+        let sa = self.angle(idx);
+        let ea = self.angle(nidx);
 
         let min_a = sa.min(ea);
         let max_a = sa.max(ea);
@@ -367,88 +491,16 @@ impl AngleManager {
         let min_idx = if min_a == sa { idx } else { nidx };
         let max_idx = if max_a == sa { idx } else { nidx };
 
-        if self.largest_angle() <= min_a {
-            let mut info = AngleRangeInfo::new();
-            info.start_index = min_idx;
-            info.start_angle = min_a;
-            info.start_pos = self.vertices[min_idx];
-            info.end_index = max_idx;
-            info.end_angle = max_a;
-            info.end_pos = self.vertices[max_idx];
-            self.angle_range.push(info);
+        // 180 度を超えるということは、0 度を跨いでるので分割
+        if max_a - min_a > PI {
+            if 0.0 < min_a {
+                self.push_range(idx, nidx, ,);
+            }
+            if max_a < PI * 2.0 {
+                self.push_range(min_idx, max_idx, max_a, PI * 2.0);
+            }
         } else {
-            // 開始 index が中途半端なら merge
-            let mut start_index = self.detect_range(min_a).unwrap();
-            if self.angle_range[start_index].start_angle < min_a
-                && min_a < self.angle_range[start_index].end_angle
-            {
-                self.split_range(min_a);
-                start_index += 1;
-            }
-
-            let end_index = self.detect_range(max_a).unwrap();
-            if self.angle_range[end_index].start_angle < max_a
-                && max_a < self.angle_range[end_index].end_angle
-            {
-                self.split_range(max_a);
-                // 開始 index はずれるけど、終了 index はずれない
-            }
-
-            let mut split_offset = 0;
-
-            // 引っかかる全ての区間が対象
-            for i in start_index..=end_index {
-                let i = i + split_offset;
-
-                let osa = self.angle_range[i].start_angle;
-                let oea = self.angle_range[i].end_angle;
-                let orig_start_dist = self.current_distance(osa).unwrap();
-                let orig_end_dist = self.current_distance(oea).unwrap();
-                let new_start_dist = self.distance(min_idx);
-                let new_end_dist = self.distance(max_idx);
-
-                if new_start_dist < orig_start_dist && new_end_dist < orig_end_dist {
-                    // 最初も最後も近ければ、既存のものを全て書き換え
-                    self.angle_range[i].start_index = min_idx;
-                    self.angle_range[i].start_pos = self.vertices[min_idx];
-                    self.angle_range[i].end_index = max_idx;
-                    self.angle_range[i].end_pos = self.vertices[max_idx];
-                } else if new_start_dist >= orig_start_dist && new_end_dist >= orig_end_dist {
-                    // 最初も最後も遠ければ、何もしない
-                } else {
-                    let p0 = self.vertices[min_idx];
-                    let p1 = self.vertices[max_idx];
-                    let p2 = self.angle_range[i].start_pos;
-                    let p3 = self.angle_range[i].end_pos;
-
-                    let l0 = Line::new(p0, p1);
-                    let l1 = Line::new(p2, p3);
-
-                    if let Some(v) = l0.intersect_point(&l1) {
-                        let angle = AngleManager::calculate_angle(v);
-                        self.split_range(angle);
-                        split_offset += 1;
-
-                        if new_start_dist < orig_start_dist && new_end_dist >= orig_end_dist {
-                            // 最後だけ近い場合は、その交点を見つけてそこで区間を分割
-                            self.angle_range[i].start_index = min_idx;
-                            self.angle_range[i].start_pos = self.vertices[min_idx];
-                            self.angle_range[i].end_index = max_idx;
-                            self.angle_range[i].end_pos = self.vertices[max_idx];
-                        } else if new_start_dist >= orig_start_dist && new_end_dist < orig_end_dist
-                        {
-                            // 最後だけ近い場合は、その交点を見つけてそこで区間を分割
-                            self.angle_range[i + 1].start_index = min_idx;
-                            self.angle_range[i + 1].start_pos = self.vertices[min_idx];
-                            self.angle_range[i + 1].end_index = max_idx;
-                            self.angle_range[i + 1].end_pos = self.vertices[max_idx];
-                        }
-                    } else {
-                        panic!();
-                    }
-                }
-            }
-            self.merge();
+            self.push_range(min_idx, max_idx, min_a, max_a);
         }
     }
 
@@ -480,6 +532,8 @@ impl AngleManager {
             idx
         };
 
+        self.normalize(first_idx);
+
         for i in 0..n {
             self.push((first_idx + i) % n);
         }
@@ -493,4 +547,19 @@ impl AngleManager {
 }
 
 #[test]
-fn test_visible_area() {}
+fn test_visible_area() {
+    let base = Point::new(1.0, 1.0);
+
+    let mut ps = vec![
+        Point::new(0.0, 0.0),
+        Point::new(0.0, 2.0),
+        Point::new(2.0, 2.0),
+        Point::new(2.0, 4.0),
+        Point::new(4.0, 4.0),
+        Point::new(4.0, 0.0),
+    ];
+
+    let mut angle_manager = AngleManager::new(&ps, &base);
+    let ans = angle_manager.doIt();
+    println!("{:?}", ans);
+}
