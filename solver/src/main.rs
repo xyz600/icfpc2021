@@ -248,7 +248,29 @@ fn evaluate_all(problem: &SolverProblem, sol: &Solution, epsilon: f64) -> f64 {
     (dislike(problem, sol) + (p0 + p1 * p01_rate + p2 * p02_rate) * score_penalty_rate) * scale
 }
 
-fn solve2(_problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
+fn save_to_best(problem: &SolverProblem, solution: &Solution, problem_id: usize, epsilon: f64) {
+    let best_filepath = format!("data/best/{}.json", problem_id);
+    let best_pose = Pose::from_file(best_filepath.as_str());
+    let mut best_solution = Solution { vertices: vec![] };
+    for v in best_pose.vertices.iter() {
+        best_solution.vertices.push(Pos::new(
+            v.x as i64 - problem.offset_x,
+            v.y as i64 - problem.offset_y,
+        ));
+    }
+
+    let best_eval = evaluate_all(problem, &best_solution, epsilon);
+    let new_eval = evaluate_all(problem, &solution, epsilon);
+    if best_eval > new_eval {
+        println!(
+            "update! problem {}: {} -> {}",
+            problem_id, best_eval, new_eval
+        );
+        solution.to_pose(problem).save_file(best_filepath);
+    }
+}
+
+fn solve2(_problem: &Problem, _seed: u64, timeout: u128, problem_id: usize) -> Option<Pose> {
     let problem = SolverProblem::new(_problem);
 
     let n = problem.orig_figure_vertices.len();
@@ -356,8 +378,8 @@ fn solve2(_problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
     println!("score: {}", dislike(&problem, &best_solution));
     let (p0, p1, p2) = penalty(&problem, &best_solution, _problem.epsilon);
     println!("penalty: {} {} {}", p0, p1, p2);
-    let pose = best_solution.to_pose(&problem);
-    println!("{}", pose.to_json());
+
+    save_to_best(&problem, &best_solution, problem_id, _problem.epsilon);
 
     if p0 + p1 + p2 < EPS {
         let pose = best_solution.to_pose(&problem);
@@ -371,7 +393,7 @@ fn main() {
     let max_id = 106;
 
     // solve
-    let pose_list = (1..=107)
+    let pose_list = (1..=max_id)
         .collect::<Vec<usize>>()
         .par_iter()
         .map(|id| -> Option<Pose> {
@@ -380,7 +402,7 @@ fn main() {
             if let Some(pose) = solve(&problem) {
                 pose.save_file(format!("data/out/{}.json", id));
                 return Some(pose);
-            } else if let Some(pose) = solve2(&problem, 0, 60000) {
+            } else if let Some(pose) = solve2(&problem, 0, 60000, *id) {
                 pose.save_file(format!("data/out/{}.json", id));
                 return Some(pose);
             } else {
@@ -392,8 +414,9 @@ fn main() {
     // submit
     pose_list
         .par_iter()
-        .zip(1..max_id + 1)
-        .for_each(|(maybe_pose, id)| {
+        .enumerate()
+        .for_each(|(id, maybe_pose)| {
+            let id = id + 1;
             if let Some(pose) = maybe_pose {
                 if let Err(_msg) = submit_problem(id, pose) {
                     println!("fail to submit problem {}", id);
