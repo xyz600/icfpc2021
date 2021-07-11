@@ -6,4 +6,5 @@ members = [
     "solver",
     "hole_print",
     "eval-contour-dump",
+    "submitter",
 ]
