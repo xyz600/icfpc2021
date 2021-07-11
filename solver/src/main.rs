@@ -7,6 +7,7 @@ use lib::client::submit_problem;
 use lib::data::{Point, Pose, Problem};
 use rand::prelude::ThreadRng;
 use rand::Rng;
+use rayon::prelude::*;
 use std::time::Instant;
 
 fn is_acceptable(problem: &Problem, vertex_map: &Vec<usize>) -> bool {
@@ -330,7 +331,7 @@ fn solve2(_problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
 
     println!("counter = {}", counter);
     println!("score: {}", dislike(&problem, &best_solution));
-    let (p0, p1, p2) = penalty(&problem, &best_solution, _problem.epsilon, true);
+    let (p0, p1, p2) = penalty(&problem, &best_solution, _problem.epsilon);
     println!("penalty: {} {} {}", p0, p1, p2);
     let pose = best_solution.to_pose(&problem);
     println!("{}", pose.to_json());
@@ -344,22 +345,33 @@ fn solve2(_problem: &Problem, _seed: u64, timeout: u128) -> Option<Pose> {
 }
 
 fn main() {
-    for id in 1..2 {
-        let problem = Problem::from_file(format!("data/in/{}.json", id).as_str());
-        println!("load problem {}:", id);
-        if let Some(pose) = solve(&problem) {
-            println!("submit problem! {}", id);
-            if let Err(_msg) = submit_problem(id, &pose) {
-                panic!("fail to submit problem {}", id);
+    // solve
+    let pose_list = (1..79)
+        .collect::<Vec<usize>>()
+        .par_iter()
+        .map(|id| -> Option<Pose> {
+            let problem = Problem::from_file(format!("data/in/{}.json", id).as_str());
+            println!("load problem {}:", id);
+            if let Some(pose) = solve(&problem) {
+                return Some(pose);
+            } else if let Some(pose) = solve2(&problem, 0, 60000) {
+                return Some(pose);
+            } else {
+                println!("fail to find solution");
             }
-        } else if let Some(pose) = solve2(&problem, 0, 10000) {
-            println!("submit problem 2! {}", id);
-            if let Err(_msg) = submit_problem(id, &pose) {
-                panic!("fail to submit problem 2 {}", id);
+            None
+        })
+        .collect::<Vec<Option<Pose>>>();
+
+    // submit
+    pose_list
+        .par_iter()
+        .zip(1..79)
+        .for_each(|(maybe_pose, id)| {
+            if let Some(pose) = maybe_pose {
+                if let Err(_msg) = submit_problem(id, pose) {
+                    println!("fail to submit problem {}", id);
+                }
             }
-        } else {
-            println!("fail to find solution");
-        }
-        println!("==========");
-    }
+        });
 }
