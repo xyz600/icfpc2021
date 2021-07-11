@@ -597,6 +597,28 @@ impl Pose {
         buffer
     }
 
+    pub fn from_file(filepath: &str) -> Pose {
+        let file = File::open(filepath).unwrap();
+        let mut buf = BufReader::new(file);
+        let mut s = String::new();
+        match buf.read_to_string(&mut s) {
+            Err(_) => panic!("fail to read file {}", filepath),
+            Ok(_) => Pose::from_json(s.as_str()),
+        }
+    }
+
+    pub fn from_json(json: &str) -> Pose {
+        let mut pose = Pose::new();
+        let v = serde_json::from_str::<Value>(json).unwrap();
+        for point in v["vertices"].as_array().unwrap() {
+            let p = point.as_array().unwrap();
+            let x = p[0].as_f64().unwrap();
+            let y = p[1].as_f64().unwrap();
+            pose.vertices.push(Point::new(x, y));
+        }
+        pose
+    }
+
     pub fn save_file(&self, filepath: String) {
         let mut writer = BufWriter::new(File::create(filepath.as_str()).unwrap());
         if let Err(_msg) = writer.write(self.to_json().as_bytes()) {
@@ -611,4 +633,12 @@ fn test_pose_to_json() {
     pose.push(Point::new(2.5, 3.5));
     pose.push(Point::new(4.5, 5.5));
     assert_eq!(pose.to_json(), "{\"vertices\": [[2.5, 3.5], [4.5, 5.5]]}");
+}
+
+#[test]
+fn test_pose_from_file() {
+    let filepath = "../data/best/11.json";
+    let pose = Pose::from_file(filepath);
+
+    assert_eq!(pose.vertices.len(), 3);
 }
