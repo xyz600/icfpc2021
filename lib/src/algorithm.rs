@@ -1,4 +1,5 @@
 use crate::data::{Hole, Line, Point, Triangle};
+use std::collections::HashSet;
 
 const EPS: f64 = 1e-8;
 
@@ -143,7 +144,8 @@ impl HoleDistanceCalculator {
     pub fn distance(&self, p: &Point) -> f64 {
         let mut min_distance = 1e10f64;
         for tri in self.decomposed_triangles.iter() {
-            min_distance = min_distance.min(tri.distance_of(&p));
+            let dist = tri.distance_of(&p);
+            min_distance = min_distance.min(dist);
         }
         min_distance
     }
@@ -197,6 +199,48 @@ fn test_hole_distance() {
 
     let p = Point::new(-1.0, 0.0);
     assert!((hdc.distance(&p) - 1.0f64.sqrt()).abs() < EPS);
+}
+
+// #[test]
+fn test_hole_distance2() {
+    let ps = vec![
+        Point::new(0.0, 0.0),
+        Point::new(0.0, 2.0),
+        Point::new(2.0, 2.0),
+        Point::new(4.0, 4.0),
+        Point::new(4.0, 0.0),
+    ];
+    let hole = Hole { vertices: ps };
+
+    let hdc = HoleDistanceCalculator::new(&hole);
+
+    let distance_exp = vec![
+        vec![0.0, 0.0, 0.0, 0.0, 0.0],
+        vec![0.0, 0.0, 0.0, 0.0, 0.0],
+        vec![0.0, 0.0, 0.0, 0.0, 0.0],
+        vec![1.0, 1.0, 0.5f64.sqrt(), 0.0, 0.0],
+        vec![2.0, 2.0, 2.0f64.sqrt(), 0.5f64.sqrt(), 0.0],
+    ];
+
+    for y in 0..=4 {
+        for x in 0..4 {
+            let p = Point::new(x as f64, y as f64);
+            let dist = hdc.distance(&p);
+            print!("{} ", dist);
+        }
+        println!();
+    }
+
+    let p = Point::new(2.0, 4.0);
+    assert!((hdc.distance(&p) - 2.0f64.sqrt()).abs() < EPS);
+
+    for y in 0..=4 {
+        for x in 0..4 {
+            let p = Point::new(x as f64, y as f64);
+            let dist = hdc.distance(&p);
+            assert!((dist - distance_exp[y][x]).abs() < EPS);
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -581,7 +625,7 @@ impl AngleManager {
     }
 }
 
-#[test]
+// #[test]
 fn test_visible_area() {
     let base = Point::new(1.0, 1.0);
 
@@ -596,53 +640,143 @@ fn test_visible_area() {
 
     let mut angle_manager = AngleManager::new(&ps, &base);
     let ans = angle_manager.doIt();
-    println!("{:?}", ans);
 }
 
-pub fn check_visibility(pos_list: &Vec<Point>, base: &Point) -> Vec<Point> {
-    let visible = |p: &Point| -> bool {
-        let n = pos_list.len();
-        for i in 0..pos_list.len() {
-            let p1 = pos_list[i];
-            let p2 = pos_list[(i + 1) % n];
+// pub fn check_visibility(pos_list: &Vec<Point>, base: &Point) -> Vec<Point> {
+//     let visible = |p: &Point| -> bool {
+//         let n = pos_list.len();
+//         for i in 0..pos_list.len() {
+//             let p1 = pos_list[i];
+//             let p2 = pos_list[(i + 1) % n];
 
-            let l0 = Line::new(p1, p2);
-            let l1 = Line::new(*base, *p);
+//             let l0 = Line::new(*base, *p);
+//             let l1 = Line::new(p1, p2);
 
-            if l0.intersect(&l1) {
-                return false;
-            }
-        }
-        true
-    };
+//             // 同一直線状にあれば
+//             if l0.on_same_line(&l1) {
+//                 continue;
+//             }
 
-    let mut vec = vec![];
-    for p in pos_list.iter() {
-        if visible(p) {
-            vec.push(*p);
-        }
-    }
-    vec
-}
+//             if base.x == p1.x && base.y == p1.y {
 
-#[test]
-fn test_visibility1() {
-    let base = Point::new(1.0, 1.0);
+//             } else if base.y == p1.x
 
-    let ps = vec![
-        Point::new(0.0, 0.0),
-        Point::new(0.0, 2.0),
-        Point::new(2.0, 2.0),
-        Point::new(2.0, 4.0),
-        Point::new(4.0, 4.0),
-        Point::new(4.0, 0.0),
-    ];
+//             if  && l0.intersect(&l1) {
+//                 return false;
+//             }
+//         }
+//         true
+//     };
 
-    let ret = check_visibility(&ps, &base);
-    assert_eq!(ret.len(), 5);
+//     let mut vec = vec![];
+//     for p in pos_list.iter() {
+//         if visible(p) {
+//             vec.push(*p);
+//         }
+//     }
+//     vec
+// }
 
-    let base = Point::new(0.0, 1.0);
-    let ret = check_visibility(&ps, &base);
-    assert_eq!(ret.len(), 4);
-    println!("{:?}", ret);
-}
+// #[test]
+// fn test_visibility1() {
+//     // 完全な内側
+//     let ps = vec![
+//         Point::new(0.0, 0.0),
+//         Point::new(0.0, 2.0),
+//         Point::new(2.0, 2.0),
+//         Point::new(2.0, 4.0),
+//         Point::new(4.0, 4.0),
+//         Point::new(4.0, 0.0),
+//     ];
+
+//     let base = Point::new(1.0, 1.0);
+//     let ret = check_visibility(&ps, &base);
+//     println!("{:?}", ret);
+//     assert_eq!(ret.len(), 5);
+// }
+
+// #[test]
+// fn test_visibility2() {
+//     // 境界にかかる
+//     let ps = vec![
+//         Point::new(0.0, 0.0),
+//         Point::new(0.0, 2.0),
+//         Point::new(2.0, 2.0),
+//         Point::new(2.0, 4.0),
+//         Point::new(4.0, 4.0),
+//         Point::new(4.0, 0.0),
+//     ];
+
+//     let base = Point::new(0.0, 1.0);
+//     let ret = check_visibility(&ps, &base);
+//     println!("{:?}", ret);
+//     assert_eq!(ret.len(), 4);
+// }
+
+// pub fn enumerate_visible_point(hole: &Hole, base: &Point) -> HashSet<i64> {
+//     // 返り値の整数には x * 10000 + y が入っている
+
+//     let vertices = check_visibility(&hole.vertices, base);
+//     let subhole = Hole { vertices: vertices };
+
+//     let hdc = HoleDistanceCalculator::new(&hole);
+
+//     let sub_hdc = HoleDistanceCalculator::new(&subhole);
+
+//     let mut min_x = std::i64::MAX;
+//     let mut max_x = std::i64::MIN;
+//     let mut min_y = std::i64::MAX;
+//     let mut max_y = std::i64::MIN;
+
+//     for &p in subhole.vertices.iter() {
+//         min_x = min_x.min(p.x as i64);
+//         min_y = min_y.min(p.x as i64);
+//         max_x = max_x.max(p.y as i64);
+//         max_y = max_y.max(p.y as i64);
+//     }
+
+//     let mut set = HashSet::new();
+
+//     for y in min_y..=max_y {
+//         for x in min_x..=max_x {
+//             let point = Point::new(x as f64, y as f64);
+
+//             print!("{} ", sub_hdc.distance(&point));
+
+//             if sub_hdc.distance(&point) == 0.0 {
+//                 set.insert(x * 10000 + y);
+//             }
+//         }
+//         println!();
+//     }
+//     set
+// }
+
+// // #[test]
+// fn test_visible_point() {
+//     let base = Point::new(1.0, 1.0);
+
+//     let ps = vec![
+//         Point::new(0.0, 0.0),
+//         Point::new(0.0, 2.0),
+//         Point::new(2.0, 2.0),
+//         Point::new(2.0, 4.0),
+//         Point::new(4.0, 4.0),
+//         Point::new(4.0, 0.0),
+//     ];
+//     let hole = Hole { vertices: ps };
+
+//     let set = enumerate_visible_point(&hole, &base);
+
+//     let mut v = vec![];
+//     for i in set.iter() {
+//         v.push(*i);
+//     }
+//     v.sort();
+
+//     for i in v.iter() {
+//         println!("{} {}", i / 10000, i % 10000);
+//     }
+
+//     assert_eq!(set.len(), 15);
+// }

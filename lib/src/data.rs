@@ -61,11 +61,14 @@ impl Point {
             return -1;
         }
         if ab.dot(&ac) < 0.0 {
+            // c--a--b
             return 2;
         }
         if ab.norm() < ac.norm() {
+            // a--b--c
             return -2;
         }
+        // a--c--b
         0
     }
 }
@@ -151,28 +154,37 @@ impl Line {
     pub fn dy(&self) -> f64 {
         self.p1.y - self.p0.y
     }
-    pub fn intersect(&self, line: &Line) -> bool {
-        if self.p0.eq(&line.p0)
-            || self.p0.eq(&line.p1)
-            || self.p1.eq(&line.p0)
-            || self.p1.eq(&line.p1)
-        {
-            return false;
-        }
-        // https://qiita.com/zu_rin/items/e04fdec4e3dec6072104#%E5%A4%96%E7%A9%8D%E3%82%92%E7%94%A8%E3%81%84%E3%82%8B%E6%96%B9%E6%B3%95
-        let ac = Line::new(self.p0, line.p0);
-        let ad = Line::new(self.p0, line.p1);
-        let s = self.cross(&ac);
-        let t = self.cross(&ad);
-        if s * t >= 0.0 {
-            return false;
-        }
 
-        let ca = Line::new(line.p0, self.p0);
-        let cb = Line::new(line.p0, self.p1);
-        let s = line.cross(&ca);
-        let t = line.cross(&cb);
-        s * t < 0.0
+    pub fn has_same_edge(&self, line: &Line) -> bool {
+        self.p0.eq(&line.p0) || self.p0.eq(&line.p1) || self.p1.eq(&line.p0) || self.p1.eq(&line.p1)
+    }
+
+    pub fn on_same_line(&self, line: &Line) -> bool {
+        let ccw1 = Point::ccw(&self.p0, &self.p1, &line.p0);
+        let ccw2 = Point::ccw(&self.p0, &self.p1, &line.p1);
+
+        (ccw1 + 2) % 2 == 0 && (ccw2 + 2) % 2 == 0
+    }
+
+    pub fn intersect_without_edge(&self, line: &Line) -> bool {
+        let a = self.p0;
+        let b = self.p1;
+        let c = line.p0;
+        let d = line.p1;
+
+        Point::ccw(&a, &b, &c) * Point::ccw(&a, &b, &d) < 0
+            && Point::ccw(&c, &d, &a) * Point::ccw(&c, &d, &b) < 0
+    }
+
+    pub fn intersect(&self, line: &Line) -> bool {
+        // https://www.ioi-jp.org/camp/2017/2017-sp_camp-hide.pdf
+        let a = self.p0;
+        let b = self.p1;
+        let c = line.p0;
+        let d = line.p1;
+
+        Point::ccw(&a, &b, &c) * Point::ccw(&a, &b, &d) <= 0
+            && Point::ccw(&c, &d, &a) * Point::ccw(&c, &d, &b) <= 0
     }
 
     pub fn intersect_point(&self, line: &Line) -> Option<Point> {
@@ -273,14 +285,28 @@ fn test_line_intersect2() {
     let c = Point::new(1.0, 0.0);
     let ab = Line::new(a, b);
     let bc = Line::new(b, c);
-    assert!(!ab.intersect(&bc));
+    assert!(!ab.intersect_without_edge(&bc));
+    assert!(ab.intersect(&bc));
 
     let ac = Line::new(a, c);
-    assert!(!ac.intersect(&bc));
+    assert!(!ac.intersect_without_edge(&bc));
+    assert!(ac.intersect(&bc));
 }
 
 #[test]
 fn test_line_intersect3() {
+    // ある線分の中点に他の端点が含まれる場合
+    let a = Point::new(2.0, 0.5);
+    let b = Point::new(2.0, 4.0);
+    let c = Point::new(0.0, 0.0);
+    let d = Point::new(2.0, 2.0);
+    let ab = Line::new(a, b);
+    let cd = Line::new(c, d);
+    assert!(ab.intersect(&cd));
+}
+
+#[test]
+fn test_line_intersect4() {
     let p0 = Point::new(1.0, 1.0);
     let p1 = Point::new(1.0, 3.0);
     let p2 = Point::new(3.0, 3.0);
@@ -313,13 +339,11 @@ impl Triangle {
     }
 
     pub fn is_internal_of(&self, p: &Point) -> bool {
-        let g = self.gravity();
-        let gp = Line::new(g, *p);
+        let c1 = Point::ccw(&self.v0, &self.v1, p);
+        let c2 = Point::ccw(&self.v1, &self.v2, p);
+        let c3 = Point::ccw(&self.v2, &self.v0, p);
 
-        let l1 = Line::new(self.v0, self.v1);
-        let l2 = Line::new(self.v1, self.v2);
-        let l3 = Line::new(self.v2, self.v0);
-        !l1.intersect(&gp) && !l2.intersect(&gp) && !l3.intersect(&gp)
+        c1 * c2 >= 0 && c2 * c3 >= 0
     }
 
     pub fn distance_of(&self, p: &Point) -> f64 {
@@ -340,7 +364,7 @@ impl Triangle {
 
 #[test]
 fn test_distance_triangle_point1() {
-    // 三角形の内部にあるケース
+    // 三角形の外側にあるケース
     let p0 = Point::new(1.0, 1.0);
     let p1 = Point::new(1.0, 3.0);
     let p2 = Point::new(3.0, 3.0);
@@ -355,7 +379,7 @@ fn test_distance_triangle_point1() {
 
 #[test]
 fn test_distance_triangle_point2() {
-    // 三角形の外側にあるケース
+    // 三角形の内側にあるケース
     let p0 = Point::new(1.0, 1.0);
     let p1 = Point::new(1.0, 3.0);
     let p2 = Point::new(3.0, 3.0);
@@ -366,6 +390,18 @@ fn test_distance_triangle_point2() {
     let p3 = (p0 + p1 + p2 * 2.0) / 4.0;
     assert!(tri.is_internal_of(&p3));
     assert_eq!(tri.distance_of(&p3), 0.0);
+}
+
+#[test]
+fn test_distance_triangle_potin3() {
+    let p0 = Point::new(2.0, 2.0);
+    let p1 = Point::new(4.0, 0.0);
+    let p2 = Point::new(0.0, 0.0);
+    let tri = Triangle::new(p0, p1, p2);
+
+    let p3 = Point::new(2.0, 4.0);
+    assert!(!tri.is_internal_of(&p3));
+    assert_eq!(tri.distance_of(&p3), 2.0f64);
 }
 
 fn vertices_to_json(vertices: &Vec<Point>) -> String {
