@@ -4,7 +4,7 @@ use async_std::task;
 use http_client::http_types::{Method, Request};
 use http_client::HttpClient;
 
-const API_TOKEN: &str = "09d3f025-0404-45de-8361-b5db9c6bfff6";
+const API_TOKEN: &str = "";
 const URL: &str = "https://poses.live";
 
 use http_client::h1::H1Client as Client;
