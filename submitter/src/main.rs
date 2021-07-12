@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use std::path::Path;
 
 fn main() {
-    let max_id = 106;
+    let max_id = 132;
 
     let pose_list = (1..=max_id)
         .collect::<Vec<usize>>()
